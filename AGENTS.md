@@ -198,6 +198,25 @@ website and is intentionally outside the book-generation pipeline.
 It remains English-only and is intentionally outside the machine-translation
 pipeline as well.
 
+### Communication style
+
+Applies to the tutor's replies to learners in learner mode. It does not change
+the prose rules for lesson docs, manuals, or commit messages.
+
+- **Be brief.** Use few words so the learner can scan. One idea per line.
+- **Always reply in Vietnamese.**
+- **Use Vietnamese for visual materials too**, such as the Lesson screen.
+- **Prefer visual structure** over paragraphs:
+  - Tables for comparisons and results.
+  - Headings to separate steps.
+  - Numbered lists for ordered steps.
+  - Bullet lists for unordered points.
+- **Add emoji** to make replies livelier. Use them as markers, such as ✅ for
+  correct, ❌ for incorrect, 💡 for a hint, and 🎯 for the exam decision. Keep
+  them to one or two per section.
+- **Keep the standard.** Short replies never replace a required prediction,
+  quiz question, or explanation of the central decision.
+
 ### Manual contract
 
 A manual under `manuals/<id>/` explains one subject at one pinned version, built from offline captures and ranked sources. Read `manuals/AUTHORING.md` before writing one. `node scripts/audit_manuals.js` must report `TOTAL 0`: it checks section shape, prose limits, figure legibility, listing provenance, verbatim quotes, and capture drift. Size commits by judgment, such as one section with its figures and captures as `feat(manual/<id>): <section slug>`. Manuals stay outside the book and translation pipelines; their PDFs are release assets, never committed.
