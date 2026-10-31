@@ -141,9 +141,37 @@ Create `CLAUDE-CERTIFICATION.md` with this structure:
 |------|------------|-----------|------------|--------------|
 ```
 
+Then run `track-start` from **Team progress**.
+
 If the learner changes tracks, preserve evidence for shared lesson paths.
 Archive the old active plan before rebuilding the route, and require
-confirmation before doing so.
+confirmation before doing so. After the rebuild, run `track-start` for the new
+track and `lesson-complete` for each shared lesson carried over as `Complete`.
+
+## Team progress
+
+A study team can track its members on a shared sheet.
+`scripts/team/record.py` sends one event per progress change. Run it from the
+repository root, right after the matching write to `CLAUDE-CERTIFICATION.md`,
+in every clone that has an active track:
+
+| When | Command |
+|------|---------|
+| Onboarding confirms or changes the active track | `python3 scripts/team/record.py track-start --track <exam-code-lower>` |
+| A route lesson becomes `Complete` | `python3 scripts/team/record.py lesson-complete --track <exam-code-lower> --lesson <lesson-path> --quiz <N/M>` |
+| An assessment attempt is appended | `python3 scripts/team/record.py assessment --track <exam-code-lower> --kind <kind> --score <raw-percent> --domain <domain-id>=<percent>` |
+| The session closes | `python3 scripts/team/record.py flush` |
+
+- `--lesson` is the path exactly as the track's `lessons` array lists it.
+- `--kind` is `diagnostic` or `mock`. Repeat `--domain` once per domain result.
+- Record a lesson only when its status becomes `Complete`, never for
+  `Theory complete, lab pending`.
+- Exit 0 means done or safely skipped: the clone has not joined a team, or the
+  network failed and the event waits in an outbox. Continue the session and do
+  not retry.
+- A non-zero exit means the arguments are wrong. Read the message, fix the
+  command, and run it again.
+- Never print, edit, or commit anything under `.team/`.
 
 ## Lesson screen
 
@@ -258,7 +286,9 @@ pending`. If the quiz is below 70 percent, add the missed domain and lesson to
 the review queue.
 
 Update `CLAUDE-CERTIFICATION.md` with the score, evidence path, note, and next
-route lesson. Preserve track order and prerequisite order.
+route lesson. Preserve track order and prerequisite order. If the status became
+`Complete`, run `lesson-complete` from **Team progress** with the post-quiz
+score.
 
 ## Assessment mode
 
@@ -277,7 +307,9 @@ generate replacement questions when a diagnostic or full mock already exists.
    not Anthropic's scaled score and cannot predict an official result.
 6. For every miss, show the stored explanation and internal lesson references.
    Add weak domains and referenced lesson paths to the review queue.
-7. Append the attempt to `CLAUDE-CERTIFICATION.md` without changing old rows.
+7. Append the attempt to `CLAUDE-CERTIFICATION.md` without changing old rows,
+   then run `assessment` from **Team progress** with the raw score and the
+   per-domain results.
 
 After a diagnostic, continue the ordered route while emphasizing weak domains.
 After a full mock, require remediation and another evidence-backed attempt
@@ -297,7 +329,7 @@ must skip the live test rather than block the offline course.
 
 ## Close each session
 
-End with four compact facts:
+Run `python3 scripts/team/record.py flush`, then end with four compact facts:
 
 - what decision the learner can now defend;
 - lab and artifact verification state;
