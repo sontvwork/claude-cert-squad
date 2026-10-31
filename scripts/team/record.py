@@ -66,7 +66,7 @@ def main(argv=None, team_dir=team.TEAM_DIR, tracks_dir=team.TRACKS_DIR, send=tea
     try:
         event = build_event(args, config, tracks_dir)
     except team.TeamError as error:
-        print(f"Lỗi: {error}", file=sys.stderr)
+        print(team.paint(f"❌ Lỗi: {error}", "error", sys.stderr), file=sys.stderr)
         return 2
     if event:
         team.append_outbox(event, team_dir)

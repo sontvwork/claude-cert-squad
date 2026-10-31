@@ -110,5 +110,51 @@ class SetupTest(unittest.TestCase):
             team.parse_yes("maybe", True)
 
 
+    def test_prompts_are_numbered_and_the_summary_closes_the_join(self):
+        prompts = []
+
+        def read(prompt):
+            prompts.append(prompt)
+            return ""
+
+        setup.join(CODE, self.team_dir, email="an.nguyen", read=read, say=self.said.append, send=Recorder())
+        self.assertEqual([p[:5] for p in prompts], ["[2/3]", "[3/3]"])
+        self.assertEqual(self.said[0], "💾 Đã lưu .team/config.json")
+        self.assertIn("📧 Email: an.nguyen@vti.com.vn", self.said)
+        self.assertIn("📊 Chia sẻ điểm: bật", self.said)
+        self.assertTrue(self.said[-1].startswith("🎉"))
+
+    def test_summary_reports_events_still_waiting(self):
+        config = {"name": "An", "email": "an@vti.com.vn", "share": False}
+        setup.summarize(config, 2, self.said.append)
+        self.assertIn("📊 Chia sẻ điểm: tắt", self.said)
+        self.assertTrue(self.said[-1].startswith("⏳ Còn 2 event"))
+
+    def test_validation_errors_start_with_a_cross(self):
+        read = answers("an@gmail.com", "an")
+        setup.ask("x", lambda value: team.normalize_email(value, "vti.com.vn"), read, self.said.append)
+        self.assertTrue(self.said[0].startswith("❌ Email phải có đuôi"))
+
+    def test_color_only_on_a_terminal_and_never_with_no_color(self):
+        class Tty:
+            def isatty(self):
+                return True
+
+        class Pipe:
+            def isatty(self):
+                return False
+
+        self.assertEqual(team.paint("hi", "error", Pipe(), {}), "hi")
+        self.assertEqual(team.paint("hi", "error", Tty(), {}), "\033[31mhi\033[0m")
+        self.assertEqual(team.paint("hi", "error", Tty(), {"NO_COLOR": "1"}), "hi")
+        self.assertEqual(team.paint("hi", "ok", Pipe(), {"FORCE_COLOR": "1"}), "\033[32mhi\033[0m")
+        self.assertEqual(team.paint("hi", "ok", Tty(), {"TERM": "dumb"}), "hi")
+
+    def test_warnings_start_with_a_warning_sign(self):
+        self.assertTrue(team.stop_message({"error": "bad_token"}, 1).startswith("⚠️ Cảnh báo"))
+        self.assertTrue(team.stop_message({"error": "network", "detail": "x"}, 1).startswith("⚠️ Cảnh báo"))
+        self.assertTrue(team.stop_message({"error": "boom"}, 1).startswith("⚠️ Cảnh báo"))
+
+
 if __name__ == "__main__":
     unittest.main()

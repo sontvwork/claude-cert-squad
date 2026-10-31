@@ -12,6 +12,7 @@ import json
 import math
 import os
 import re
+import sys
 import urllib.request
 import uuid
 from datetime import datetime
@@ -34,8 +35,28 @@ DOMAIN = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$")
 FORMULA_START = ("=", "+", "-", "@")
 
 
+ANSI = {"ok": "32", "error": "31", "warn": "33", "dim": "2", "bold": "1"}
+
+
 class TeamError(ValueError):
     """A value the member or the agent must correct before the event is valid."""
+
+
+def use_color(stream=None, env=None):
+    """Color only a real terminal, and honor NO_COLOR (https://no-color.org) and FORCE_COLOR."""
+    env = os.environ if env is None else env
+    if env.get("NO_COLOR") or env.get("TERM") == "dumb":
+        return False
+    if env.get("FORCE_COLOR"):
+        return True
+    stream = sys.stdout if stream is None else stream
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
+def paint(text, kind, stream=None, env=None):
+    if not use_color(stream, env):
+        return text
+    return f"\033[{ANSI[kind]}m{text}\033[0m"
 
 
 def encode_join_code(endpoint, token, domain):
@@ -282,11 +303,11 @@ def flush(config, team_dir=TEAM_DIR, send=post_event, say=print):
         error = reply.get("error") or "unknown"
         if error in REJECTED:
             write_lines(team_dir / "rejected.jsonl", read_lines(team_dir / "rejected.jsonl") + [event])
-            say(f"Cảnh báo: máy chủ từ chối event {event.get('type')} ({error}), đã chuyển sang .team/rejected.jsonl.")
+            say(paint(f"⚠️ Cảnh báo: máy chủ từ chối event {event.get('type')} ({error}), đã chuyển sang .team/rejected.jsonl.", "warn"))
             continue
         left = events[index:]
         write_lines(outbox, left)
-        say(stop_message(reply, len(left)))
+        say(paint(stop_message(reply, len(left)), "warn"))
         return sent, len(left)
     if events:
         write_lines(outbox, [])
@@ -296,7 +317,7 @@ def flush(config, team_dir=TEAM_DIR, send=post_event, say=print):
 def stop_message(reply, left):
     waiting = f"{left} event đang chờ trong .team/outbox.jsonl, lần ghi sau sẽ gửi tiếp."
     if reply["error"] == "bad_token":
-        return f"Cảnh báo: token team bị từ chối. Xin admin mã tham gia mới rồi chạy setup.py --join <mã>. {waiting}"
+        return f"⚠️ Cảnh báo: token team bị từ chối. Xin admin mã tham gia mới rồi chạy setup.py --join <mã>. {waiting}"
     if reply["error"] == "network":
-        return f"Cảnh báo: chưa gửi được tiến độ ({reply['detail']}). {waiting}"
-    return f"Cảnh báo: máy chủ trả lỗi {reply['error']}. {waiting}"
+        return f"⚠️ Cảnh báo: chưa gửi được tiến độ ({reply['detail']}). {waiting}"
+    return f"⚠️ Cảnh báo: máy chủ trả lỗi {reply['error']}. {waiting}"
