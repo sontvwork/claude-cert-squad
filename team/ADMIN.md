@@ -4,7 +4,9 @@ Tổng quan và giao thức: [README](README.md).
 
 ## 1. Chuẩn bị Sheet và Apps Script
 
-1. Tạo một Google Sheet. Vào **File → Settings**, chọn time zone `(GMT+07:00) Bangkok, Hanoi, Jakarta`. Tab Dashboard dùng `TODAY()` theo time zone này.
+1. Tạo một Google Sheet. Vào **File → Settings** (Tệp → Cài đặt):
+   - **Language / Ngôn ngữ**: chọn `United States` (Hoa Kỳ). Công thức của Dashboard dùng dấu phẩy. Locale `Việt Nam` đòi dấu chấm phẩy, nên mọi ô Dashboard sẽ báo `#ERROR!`. `rebuildDashboard` dừng và báo lỗi nếu locale khác `en_US`.
+   - **Time zone / Múi giờ**: chọn `(GMT+07:00) Bangkok, Hanoi, Jakarta`. Tab Dashboard dùng `TODAY()` theo time zone này.
 2. Mở **Extensions → Apps Script**. Nếu đã có project dùng để test, mở lại đúng project đó.
 3. Vào **Project Settings**, bật **Show "appsscript.json" manifest file in editor**.
 4. Dán nội dung 3 file vào editor:
@@ -64,6 +66,17 @@ Script hỏi URL Apps Script, `TEAM_TOKEN`, email domain, rồi in ra lệnh `se
 Ai có quyền xem Sheet thì xem được mọi tab, kể cả điểm trong `Events`. Nếu chia sẻ Sheet cho cả team, hãy ẩn các tab dữ liệu và tắt quyền tải, in, sao chép của người xem. Lựa chọn share của member chỉ quyết định Dashboard và Chat có hiện điểm hay không.
 
 Nếu Dashboard bị sửa hỏng, chạy `rebuildDashboard` để dựng lại.
+
+### Xem thử Dashboard bằng dữ liệu giả
+
+Dùng khi sửa bố cục, màu hay biểu đồ. Làm trên **bản sao** của Sheet, không làm trên Sheet thật.
+
+1. Trong Sheet: **File → Make a copy**, bỏ chọn **Share it with the same people**.
+2. Trong bản sao, mở **Extensions → Apps Script**, chạy `seedDemo`. Hàm thêm 6 member ảo (email bắt đầu bằng `demo.`) rồi dựng lại Progress và Dashboard.
+3. Xem tab Dashboard. Chạy lại `seedDemo` thì dữ liệu giả được thay mới, không bị nhân đôi.
+4. Xong thì chạy `clearDemo`. Hàm chỉ xoá dòng của member `demo.`.
+
+`seedDemo` từ chối chạy nếu project có `TEAM_TOKEN` hoặc `CHAT_WEBHOOK_URL`, để không ghi dữ liệu giả vào Sheet thật. Bản sao không có Script Properties nên chạy bình thường.
 
 ## 5. Quy tắc khen
 

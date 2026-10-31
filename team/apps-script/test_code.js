@@ -82,6 +82,10 @@ class FakeSheet {
     return this.getDataRange().getValues().slice(1);
   }
 
+  deleteRow(row) {
+    this.cells.splice(row - 1, 1);
+  }
+
   setFrozenRows() {}
   setColumnWidth() {}
 }
@@ -200,4 +204,56 @@ test('rebuildProgress recomputes the Progress tab after rows are deleted by hand
   app.sheets.Events.cells.splice(2, 1);
   app.context.rebuildProgress();
   assert.deepEqual(app.sheets.Progress.records()[0].slice(0, 5), ['an.nguyen@vti.com.vn', 'ccdv-f', 1, 3, 33.3]);
+});
+
+function scratchCopy(app) {
+  delete app.properties.TEAM_TOKEN;
+  delete app.properties.CHAT_WEBHOOK_URL;
+}
+
+test('seedDemo refuses to run where the live secrets are set', () => {
+  const app = load();
+  assert.throws(() => app.context.seedDemo(), /scratch copy/);
+  assert.equal(app.sheets.Events, undefined, 'nothing was written');
+});
+
+test('seedDemoRows_ fills Events, Members and Progress with every Dashboard state', () => {
+  const app = load();
+  scratchCopy(app);
+  app.context.seedDemoRows_(app.context.book_(), new Date());
+  app.context.rebuildProgress();
+
+  const members = app.sheets.Members.records();
+  assert.equal(members.length, 6);
+  assert.equal(members.find((row) => row[0] === 'demo.chi@vti.com.vn')[3], false, 'one member hides the score');
+  const pct = Object.fromEntries(app.sheets.Progress.records().map((row) => [`${row[0].split('@')[0].slice(5)}|${row[1]}`, row[4]]));
+  assert.deepEqual(pct, {'an|ccdv-f': 100, 'binh|ccdv-f': 70, 'chi|ccar-f': 40, 'dung|ccao-f': 15, 'em|ccdv-f': 25, 'em|ccao-f': 50, 'giang|ccar-p': 0});
+  const finished = app.sheets.Progress.records().find((row) => row[0] === 'demo.an@vti.com.vn');
+  assert.equal(Object.prototype.toString.call(finished[6]), '[object Date]', 'finished_at is set');
+  assert.ok(app.sheets.Events.records().some((row) => row[8] === 'mock' && row[7] === 90));
+});
+
+test('seedDemoRows_ twice leaves one copy, and clearing keeps real rows', () => {
+  const app = load();
+  app.post(lesson(0));
+  scratchCopy(app);
+  const book = app.context.book_();
+  app.context.seedDemoRows_(book, new Date());
+  const seeded = app.sheets.Events.records().length;
+  app.context.seedDemoRows_(book, new Date());
+  assert.equal(app.sheets.Events.records().length, seeded);
+  assert.equal(app.sheets.Members.records().length, 7);
+
+  app.context.removeDemoRows_(book);
+  app.context.rebuildProgress();
+  assert.equal(app.sheets.Events.records().length, 1);
+  assert.deepEqual(app.sheets.Members.records().map((row) => row[0]), ['an.nguyen@vti.com.vn']);
+  assert.deepEqual(app.sheets.Progress.records().map((row) => row[0]), ['an.nguyen@vti.com.vn']);
+});
+
+test('rebuildDashboard refuses a locale whose formula separators are not commas', () => {
+  const app = load();
+  assert.throws(() => app.context.assertFormulaLocale_({getSpreadsheetLocale: () => 'vi_VN'}), /vi_VN.*United States/);
+  assert.doesNotThrow(() => app.context.assertFormulaLocale_({getSpreadsheetLocale: () => 'en_US'}));
+  assert.throws(() => app.context.rebuildDashboard(), /getSpreadsheetLocale|locale/i, 'the check runs before any Dashboard write');
 });

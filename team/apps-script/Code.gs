@@ -140,8 +140,104 @@ function testChat() {
   if (!sendChat_('👋 Kết nối Google Chat của team đã sẵn sàng.')) throw new Error('Chat webhook failed, see the execution log.');
 }
 
+// Run from the editor of a scratch copy of the Sheet to fill Dashboard with six invented members
+// (emails start with demo.), so layout, colours and the chart can be checked. Safe to run again.
+function seedDemo() {
+  assertScratchCopy_();
+  setupSheets();
+  seedDemoRows_(book_(), new Date());
+  rebuildProgress();
+  rebuildDashboard();
+}
+
+// Removes the invented members and redraws Progress and Dashboard. Real rows are never touched.
+function clearDemo() {
+  removeDemoRows_(book_());
+  rebuildProgress();
+  rebuildDashboard();
+}
+
+function assertScratchCopy_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('TEAM_TOKEN') || props.getProperty('CHAT_WEBHOOK_URL')) {
+    throw new Error('seedDemo only runs in a scratch copy of the Sheet. TEAM_TOKEN or CHAT_WEBHOOK_URL is set here, so this looks like the live project.');
+  }
+}
+
+// Covers every Dashboard state: finished, mid-route, hidden score (share off), no mock yet, two tracks, 0%.
+var DEMO_PREFIX = 'demo.';
+var DEMO_DAYS = 14;
+var DEMO_MEMBERS = [
+  {slug: 'an', name: 'An Nguyễn', share: true, plans: [{track: 'ccdv-f', total: 20, done: 20, mock: 85}]},
+  {slug: 'binh', name: 'Bình Trần', share: true, plans: [{track: 'ccdv-f', total: 20, done: 14, mock: 82}]},
+  {slug: 'chi', name: 'Chi Lê', share: false, plans: [{track: 'ccar-f', total: 20, done: 8, mock: 90}]},
+  {slug: 'dung', name: 'Dũng Phạm', share: true, plans: [{track: 'ccao-f', total: 20, done: 3}]},
+  {slug: 'em', name: 'Em Võ', share: true, plans: [{track: 'ccdv-f', total: 20, done: 5}, {track: 'ccao-f', total: 20, done: 10, mock: 60}]},
+  {slug: 'giang', name: 'Giang Hoàng', share: true, plans: [{track: 'ccar-p', total: 20, done: 0}]}
+];
+
+function seedDemoRows_(book, now) {
+  removeDemoRows_(book);
+  var at = now.getTime();
+  var events = [];
+  DEMO_MEMBERS.forEach(function (member) {
+    var email = DEMO_PREFIX + member.slug + '@vti.com.vn';
+    var add = function (ms, type, track, total, data) {
+      events.push({v: SCHEMA_VERSION, ts: new Date(ms).toISOString(), email: email, type: type, track: track, route_total: total, data: data});
+    };
+    add(at - DEMO_DAYS * DAY_MS, 'member_joined', null, null, {name: member.name, share: member.share});
+    member.plans.forEach(function (plan) {
+      add(at - DEMO_DAYS * DAY_MS + 60 * 60 * 1000, 'track_started', plan.track, plan.total, {});
+      for (var i = 0; i < plan.done; i++) {
+        // Lessons spread over the last 13 days; the newest lands now, so "Tuần này" has a mix of values.
+        var ago = (plan.done - 1 - i) * (DEMO_DAYS - 1) * DAY_MS / plan.done;
+        var lesson = 'certifications/claude/lessons/demo-lesson-' + (i < 9 ? '0' : '') + (i + 1);
+        add(at - ago, 'lesson_completed', plan.track, plan.total, {lesson: lesson, quiz: '2/2'});
+      }
+      if (plan.mock) {
+        add(at - DAY_MS, 'assessment_attempted', plan.track, plan.total,
+          {kind: 'mock', assessment_id: 'claude-' + plan.track + '-mock-01', score: plan.mock});
+      }
+    });
+  });
+  events.sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0; });
+  var members = {};
+  var rows = events.map(function (event, index) {
+    event.id = 'demo-' + (index + 1);
+    var when = new Date(event.ts);
+    members[event.email] = memberRow(members[event.email] || null, event, when);
+    return eventRow(event, when);
+  });
+  appendRows_(tab_(book, 'Events'), rows);
+  appendRows_(tab_(book, 'Members'), Object.keys(members).map(function (email) { return members[email]; }));
+}
+
+function removeDemoRows_(book) {
+  [['Events', 3], ['Members', 0]].forEach(function (target) {
+    var sheet = tab_(book, target[0]);
+    var rows = dataRows_(sheet);
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (String(rows[i][target[1]]).indexOf(DEMO_PREFIX) === 0) sheet.deleteRow(i + 2);
+    }
+  });
+}
+
+function appendRows_(sheet, rows) {
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+}
+
+// setFormulas takes the separators of the Sheet's locale. These formulas use the English ones (commas), so
+// a locale such as vi_VN, which expects semicolons, turns every Dashboard cell into #ERROR! (parse error).
+function assertFormulaLocale_(book) {
+  var locale = book.getSpreadsheetLocale();
+  if (locale !== 'en_US') {
+    throw new Error('Spreadsheet locale is ' + locale + '. Set File > Settings > Language to United States (en_US), then run again.');
+  }
+}
+
 function rebuildDashboard() {
   var book = book_();
+  assertFormulaLocale_(book);
   var sheet = book.getSheetByName('Dashboard') || book.insertSheet('Dashboard', 0);
   sheet.getCharts().forEach(function (chart) { sheet.removeChart(chart); });
   sheet.clear();
