@@ -140,3 +140,10 @@ site/manuals.html
 .project-validation/
 projects/*/solution/output/
 projects/*/solution/demo-output/
+
+# Learner progress, learner artifacts and the team recorder config stay on
+# each member's machine. .team/config.json holds the shared team token.
+CLAUDE-CERTIFICATION.md
+CLAUDE-CERTIFICATION-*.md
+learning-artifacts/
+.team/
