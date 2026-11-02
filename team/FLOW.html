@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luồng tiến độ team</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --card: #ffffff;
+    --fg: #1d1f24;
+    --muted: #6a6f7a;
+    --line: #d9d7cf;
+    --blue: #2f6fdb;
+    --blue-soft: #e6eefc;
+    --green: #1e8a5a;
+    --green-soft: #e3f4ec;
+    --amber: #c27a00;
+    --amber-soft: #fdf1dc;
+    --violet: #7048c8;
+    --violet-soft: #efe9fb;
+    --red: #c4453a;
+    --red-soft: #fbe8e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a;
+      --card: #1d2026;
+      --fg: #e9eaee;
+      --muted: #9aa0ab;
+      --line: #343842;
+      --blue: #7ea8ff;
+      --blue-soft: #1f2b44;
+      --green: #5fd19b;
+      --green-soft: #183328;
+      --amber: #f2b84b;
+      --amber-soft: #382c14;
+      --violet: #b79bff;
+      --violet-soft: #2a2242;
+      --red: #ff8a7f;
+      --red-soft: #3a1f1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --card: #1d2026;
+    --fg: #e9eaee;
+    --muted: #9aa0ab;
+    --line: #343842;
+    --blue: #7ea8ff;
+    --blue-soft: #1f2b44;
+    --green: #5fd19b;
+    --green-soft: #183328;
+    --amber: #f2b84b;
+    --amber-soft: #382c14;
+    --violet: #b79bff;
+    --violet-soft: #2a2242;
+    --red: #ff8a7f;
+    --red-soft: #3a1f1d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  section { margin-top: 40px; }
+  h2 { font-size: 19px; margin: 0 0 14px; display: flex; gap: 10px; align-items: center; }
+  h2 .n {
+    display: inline-grid; place-items: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--fg); color: var(--bg); font-size: 14px;
+  }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px;
+  }
+  .scroll { overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--fg); font-family: "Be Vietnam Pro", system-ui, sans-serif; }
+  svg .sub { fill: var(--muted); font-size: 12px; }
+  svg .lbl { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--card); stroke-width: 5px; }
+  svg .zone-t { font-size: 14px; font-weight: 600; }
+  svg .t { font-size: 15px; font-weight: 600; }
+  svg .wire { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+  svg .wire.dash { stroke-dasharray: 5 4; }
+  svg .head { fill: var(--muted); }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card .ic { font-size: 26px; line-height: 1; }
+  .card b { font-size: 15px; }
+  .card .when { color: var(--muted); font-size: 13.5px; }
+  .chip {
+    align-self: flex-start; border-radius: 8px; padding: 3px 8px;
+    background: var(--blue-soft); color: var(--blue);
+  }
+  .badge { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; align-self: flex-start; }
+  .b-green { background: var(--green-soft); color: var(--green); }
+  .b-amber { background: var(--amber-soft); color: var(--amber); }
+  .b-violet { background: var(--violet-soft); color: var(--violet); }
+
+  .pipe { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .pipe li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; position: relative; padding-bottom: 14px; }
+  .pipe li::before {
+    content: ""; position: absolute; left: 17px; top: 30px; bottom: 0;
+    width: 2px; background: var(--line);
+  }
+  .pipe li:last-child::before { display: none; }
+  .pipe .dot {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--green-soft); color: var(--green); font-weight: 700; z-index: 1;
+  }
+  .pipe .body { padding-top: 6px; }
+  .pipe .x { color: var(--red); font-size: 13.5px; }
+  .pipe .ok { color: var(--muted); font-size: 13.5px; }
+
+  .chat { display: grid; gap: 10px; }
+  .bubble {
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px;
+    padding: 10px 14px; max-width: 560px; white-space: pre-line;
+  }
+  .bubble small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>📈 Tiến độ team đi đâu?</h1>
+  <p>Từ buổi học trên máy bạn → Google Sheet → Google Chat.</p>
+</header>
+
+<!-- 1. Tổng quan -->
+<section>
+  <h2><span class="n">1</span>Bức tranh tổng thể</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 420" role="img" aria-label="Sơ đồ kiến trúc: máy member gửi event lên Apps Script, Apps Script ghi Sheet và gửi Google Chat">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+
+      <!-- Zone: máy member -->
+      <rect x="20" y="20" width="290" height="380" rx="18" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".35"/>
+      <text class="zone-t" x="40" y="50" style="fill:var(--blue)">💻 Máy của bạn</text>
+
+      <rect x="50" y="78" width="230" height="66" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="66" y="106">🤖 Tutor AI</text>
+      <text class="sub" x="66" y="128">Claude Code · Codex · Antigravity</text>
+
+      <rect x="50" y="190" width="230" height="60" rx="12" fill="var(--card)" stroke="var(--blue)" stroke-width="1.5"/>
+      <text class="t" x="66" y="216">⚙️ record.py</text>
+      <text class="sub" x="66" y="236">kiểm tra + đóng gói event</text>
+
+      <rect x="50" y="300" width="230" height="60" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="66" y="326">📥 outbox.jsonl</text>
+      <text class="sub" x="66" y="346">hàng đợi khi mất mạng</text>
+
+      <path class="wire" d="M165 144V188" marker-end="url(#ah)"/>
+      <text class="lbl" x="176" y="171">mỗi lần tiến độ đổi</text>
+      <path class="wire" d="M165 252V298" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <text class="lbl" x="176" y="280">lưu ⇄ gửi lại</text>
+
+      <!-- Zone: Google -->
+      <rect x="340" y="20" width="640" height="380" rx="18" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".35"/>
+      <text class="zone-t" x="360" y="50" style="fill:var(--green)">☁️ Google Workspace</text>
+
+      <rect x="380" y="180" width="200" height="76" rx="12" fill="var(--card)" stroke="var(--green)" stroke-width="1.5"/>
+      <text class="t" x="396" y="210">⚡ Apps Script</text>
+      <text class="sub" x="396" y="232">doPost · nhận event</text>
+
+      <rect x="380" y="312" width="200" height="66" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="396" y="340">⏰ weeklySummary</text>
+      <text class="sub" x="396" y="361">Chủ nhật 22h</text>
+
+      <!-- Sheet -->
+      <rect x="660" y="70" width="295" height="160" rx="12" fill="var(--card)" stroke="var(--violet)" stroke-width="1.5"/>
+      <text class="t" x="676" y="98">📊 Google Sheet</text>
+      <g font-size="12">
+        <rect x="676" y="112" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="718" y="130" text-anchor="middle" style="fill:var(--violet)">Events</text>
+        <rect x="766" y="112" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="808" y="130" text-anchor="middle" style="fill:var(--violet)">Members</text>
+        <rect x="856" y="112" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="898" y="130" text-anchor="middle" style="fill:var(--violet)">Progress</text>
+        <rect x="676" y="146" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="718" y="164" text-anchor="middle" style="fill:var(--violet)">Awards</text>
+        <rect x="766" y="146" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="808" y="164" text-anchor="middle" style="fill:var(--violet)">Templates</text>
+        <rect x="856" y="146" width="84" height="26" rx="7" fill="var(--violet)"/><text x="898" y="164" text-anchor="middle" style="fill:var(--card);font-weight:600">Dashboard</text>
+      </g>
+      <text class="sub" x="676" y="204">Dashboard tự tính bằng công thức</text>
+
+      <!-- Chat -->
+      <rect x="660" y="300" width="295" height="78" rx="12" fill="var(--card)" stroke="var(--amber)" stroke-width="1.5"/>
+      <text class="t" x="676" y="330">💬 Google Chat</text>
+      <text class="sub" x="676" y="352">Nhóm chat của team</text>
+
+      <!-- wires -->
+      <path class="wire" d="M282 220H378" marker-end="url(#ah)"/>
+      <text class="lbl" x="296" y="210">POST + token</text>
+
+      <path class="wire" d="M582 200C620 200 620 150 658 150" marker-end="url(#ah)"/>
+      <text class="lbl" x="598" y="166">ghi</text>
+
+      <path class="wire" d="M582 238C620 238 620 322 658 322" marker-end="url(#ah)"/>
+      <text class="lbl" x="594" y="290">đột phá</text>
+
+      <path class="wire" d="M582 352H658" marker-end="url(#ah)"/>
+      <text class="lbl" x="598" y="372">top 3</text>
+
+      <path class="wire dash" d="M480 312V282C480 272 600 272 640 250L680 232" marker-end="url(#ah)"/>
+      <text class="lbl" x="488" y="296">đọc</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 2. Khi nào ghi -->
+<section>
+  <h2><span class="n">2</span>Khi nào tiến độ được ghi?</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="ic">🚀</span>
+      <b>Chọn track</b>
+      <span class="when">Lúc onboarding</span>
+      <code class="chip">track-start</code>
+    </div>
+    <div class="card">
+      <span class="ic">✅</span>
+      <b>Xong 1 bài</b>
+      <span class="when">Chỉ khi bài đạt <b>Complete</b></span>
+      <code class="chip">lesson-complete</code>
+    </div>
+    <div class="card">
+      <span class="ic">📝</span>
+      <b>Làm bài kiểm tra</b>
+      <span class="when">Diagnostic hoặc mock</span>
+      <code class="chip">assessment</code>
+    </div>
+    <div class="card">
+      <span class="ic">👋</span>
+      <b>Kết thúc buổi học</b>
+      <span class="when">Gửi nốt event còn kẹt</span>
+      <code class="chip">flush</code>
+    </div>
+  </div>
+  <p style="color:var(--muted);font-size:13.5px;margin:10px 2px 0">💡 Tutor tự gọi các lệnh này. Bạn không cần làm gì.</p>
+</section>
+
+<!-- 3. Gửi an toàn -->
+<section>
+  <h2><span class="n">3</span>Mất mạng thì sao?</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 210" role="img" aria-label="Event được lưu vào outbox trước, gửi thành công thì xoá, lỗi thì giữ lại để gửi lần sau">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+      <rect x="20" y="70" width="170" height="64" rx="12" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".5"/>
+      <text class="t" x="105" y="98" text-anchor="middle">📦 Event mới</text>
+      <text class="sub" x="105" y="119" text-anchor="middle">có id duy nhất</text>
+
+      <rect x="250" y="70" width="190" height="64" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="345" y="98" text-anchor="middle">📥 Vào outbox</text>
+      <text class="sub" x="345" y="119" text-anchor="middle">lưu trước khi gửi</text>
+
+      <rect x="500" y="70" width="190" height="64" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="595" y="98" text-anchor="middle">📡 Gửi cả outbox</text>
+      <text class="sub" x="595" y="119" text-anchor="middle">timeout 10 giây</text>
+
+      <rect x="770" y="16" width="210" height="64" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".6"/>
+      <text class="t" x="875" y="44" text-anchor="middle" style="fill:var(--green)">✅ Thành công</text>
+      <text class="sub" x="875" y="65" text-anchor="middle">xoá khỏi outbox</text>
+
+      <rect x="770" y="128" width="210" height="64" rx="12" fill="var(--red-soft)" stroke="var(--red)" stroke-opacity=".6"/>
+      <text class="t" x="875" y="156" text-anchor="middle" style="fill:var(--red)">📴 Lỗi mạng</text>
+      <text class="sub" x="875" y="177" text-anchor="middle">giữ lại · buổi học vẫn chạy</text>
+
+      <path class="wire" d="M192 102H248" marker-end="url(#ah2)"/>
+      <path class="wire" d="M442 102H498" marker-end="url(#ah2)"/>
+      <path class="wire" d="M692 92C730 92 730 48 768 48" marker-end="url(#ah2)"/>
+      <path class="wire" d="M692 112C730 112 730 160 768 160" marker-end="url(#ah2)"/>
+      <path class="wire dash" d="M770 186C600 206 400 206 345 138" marker-end="url(#ah2)"/>
+      <text class="lbl" x="520" y="196" text-anchor="middle">lần gọi sau gửi tiếp</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 4. doPost -->
+<section>
+  <h2><span class="n">4</span>Apps Script xử lý 1 event</h2>
+  <div class="two">
+    <div class="panel">
+      <ol class="pipe">
+        <li><span class="dot">1</span><div class="body"><b>🔐 Kiểm tra</b><br><span class="x">✗ sai token / email không phải @vti.com.vn → từ chối</span></div></li>
+        <li><span class="dot">2</span><div class="body"><b>🔁 Trùng id?</b><br><span class="ok">đã nhận rồi → bỏ qua, không ghi 2 lần</span></div></li>
+        <li><span class="dot">3</span><div class="body"><b>🧾 Ghi tab Events</b></div></li>
+        <li><span class="dot">4</span><div class="body"><b>🧮 Cập nhật Members + Progress</b><br><span class="ok">done = số bài khác nhau đã Complete</span></div></li>
+        <li><span class="dot">5</span><div class="body"><b>🏅 Xét đột phá</b><br><span class="ok">tra Awards → mỗi lời khen chỉ 1 lần</span></div></li>
+        <li><span class="dot">6</span><div class="body"><b>💬 Gửi Chat</b><br><span class="ok">chọn ngẫu nhiên 1 câu trong Templates</span></div></li>
+      </ol>
+    </div>
+    <div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="card">
+          <span class="ic">🔥</span>
+          <b>Ngày năng suất</b>
+          <span class="when">≥ 3 bài trong 1 ngày</span>
+          <span class="badge b-green">hiện tên</span>
+        </div>
+        <div class="card">
+          <span class="ic">🏆</span>
+          <b>Mock ≥ 80%</b>
+          <span class="when">Chỉ gửi lần đầu mỗi track</span>
+          <span class="badge b-amber">tắt share → 🥷 giấu tên</span>
+        </div>
+        <div class="card">
+          <span class="ic">👑</span>
+          <b>Về đích đầu tiên</b>
+          <span class="when">người đầu tiên xong track</span>
+          <span class="badge b-green">hiện tên</span>
+        </div>
+        <div class="card">
+          <span class="ic">🎓</span>
+          <b>Về đích</b>
+          <span class="when">xong toàn bộ route</span>
+          <span class="badge b-green">hiện tên</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5. Tổng kết tuần -->
+<section>
+  <h2><span class="n">5</span>Tổng kết tuần</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 230" role="img" aria-label="Chủ nhật 22h: tính phần trăm route tăng trong tuần, xếp hạng, gửi top 3 lên Chat; nếu không ai tiến bộ thì không gửi">
+      <defs>
+        <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+      <rect x="20" y="40" width="170" height="76" rx="12" fill="var(--amber-soft)" stroke="var(--amber)" stroke-opacity=".6"/>
+      <text class="t" x="105" y="72" text-anchor="middle">⏰ CN 22h</text>
+      <text class="sub" x="105" y="95" text-anchor="middle">trigger tự chạy</text>
+
+      <rect x="240" y="40" width="210" height="76" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="345" y="72" text-anchor="middle">📈 % route tăng</text>
+      <text class="sub" x="345" y="95" text-anchor="middle">bài mới xong ÷ tổng bài × 100</text>
+
+      <rect x="500" y="40" width="210" height="76" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="605" y="72" text-anchor="middle">🥇 Xếp hạng</text>
+      <text class="sub" x="605" y="95" text-anchor="middle">bằng điểm → cùng hạng</text>
+
+      <rect x="760" y="40" width="220" height="76" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".6"/>
+      <text class="t" x="870" y="72" text-anchor="middle" style="fill:var(--green)">💬 Gửi top 3</text>
+      <text class="sub" x="870" y="95" text-anchor="middle">tên + % tăng, không điểm số</text>
+
+      <rect x="500" y="160" width="210" height="56" rx="12" fill="var(--card)" stroke="var(--line)" stroke-dasharray="5 4"/>
+      <text class="t" x="605" y="194" text-anchor="middle">🤫 Không gửi</text>
+
+      <path class="wire" d="M192 78H238" marker-end="url(#ah3)"/>
+      <path class="wire" d="M452 78H498" marker-end="url(#ah3)"/>
+      <path class="wire" d="M712 78H758" marker-end="url(#ah3)"/>
+      <path class="wire dash" d="M345 118V188H498" marker-end="url(#ah3)"/>
+      <text class="lbl" x="360" y="178">không ai tiến bộ</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 6. Chat + share -->
+<section>
+  <h2><span class="n">6</span>Trên Chat trông thế nào?</h2>
+  <div class="two">
+    <div class="chat">
+      <div class="bubble"><small>Ngày năng suất</small>🔥 Cường vừa xong 3 bài trong hôm nay! Phong độ quá đỉnh 💪</div>
+      <div class="bubble"><small>Mock ≥ 80% · Member tắt share</small>🎉 Một cao thủ giấu tên vừa đạt điểm cao mock CCDV-F! 🥷</div>
+      <div class="bubble"><small>Tổng kết tuần</small>🏆 Bảng vàng tuần này:
+🥇 Minh: +19% route (CCAR-F đang ở 52.4%)
+🥈 Cường: +13.3% route (CCDV-F đang ở 60%)
+🥈 Hùng: +13.3% route (CCDV-F đang ở 26.7%)</div>
+    </div>
+    <table>
+      <thead><tr><th></th><th>Share 🟢 bật</th><th>Share ⚪ tắt</th></tr></thead>
+      <tbody>
+        <tr><td><b>Tiến độ</b></td><td>✅ công khai</td><td>✅ công khai</td></tr>
+        <tr><td><b>Điểm quiz / mock</b></td><td>✅ hiện</td><td>🙈 ẩn</td></tr>
+        <tr><td><b>Khen mock ≥ 80%</b></td><td>có tên</td><td>🥷 giấu tên</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="color:var(--muted);font-size:13.5px;margin:10px 2px 0">💡 Đổi chế độ share: <code>python3 scripts/team/setup.py --share off</code></p>
+</section>
+
+<footer>Mã nguồn: <code>scripts/team/</code> · <code>team/apps-script/</code></footer>
+</main>
+</body>
+</html>
