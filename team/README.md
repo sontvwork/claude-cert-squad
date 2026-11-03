@@ -17,6 +17,15 @@ flowchart LR
 
 Bản clone chưa tham gia team vẫn học bình thường: `record.py` in một dòng rồi thoát 0.
 
+Member học trên nhiều máy thì `scripts/team/sync.py` đồng bộ `CLAUDE-CERTIFICATION.md` và `learning-artifacts/` qua cùng web app. Snapshot được mã hoá trên máy member trước khi gửi.
+
+```mermaid
+flowchart LR
+  P[Session bắt đầu] -->|sync.py pull| A[Apps Script doPost]
+  W[Sau mỗi lần ghi tiến độ] -->|sync.py push hoặc record.py| A
+  A --> S[(Sheet: State, StateChunks)]
+```
+
 ## Hướng dẫn
 
 - [Dành cho member](MEMBER.md): tham gia team, học với tutor, bật/tắt chia sẻ điểm.
@@ -57,6 +66,48 @@ Web app trả về `{"ok": true}`, hoặc `{"ok": true, "duplicate": true}` khi 
 | `bad_token` | Giữ event, dừng gửi, nhắc lấy mã tham gia mới |
 | `busy`, `server_error`, lỗi mạng | Giữ event, dừng gửi, lần sau gửi tiếp |
 | `bad_json`, `bad_request`, `bad_domain` | Chuyển event sang `.team/rejected.jsonl`, gửi tiếp event sau |
+
+### Đồng bộ nhiều máy
+
+Yêu cầu đồng bộ cũng là `POST` JSON, phân biệt với event bằng trường `action`:
+
+```json
+{
+  "action": "state_push",
+  "token": "<TEAM_TOKEN>",
+  "email": "an.nguyen@vti.com.vn",
+  "auth": "<64 ký tự hex = HMAC-SHA256(sync_key, \"auth\")>",
+  "base_rev": 3,
+  "blob": "<snapshot đã mã hoá, base64url>"
+}
+```
+
+| `action` | Trường thêm | Trả về khi `ok` |
+|---|---|---|
+| `state_claim` | | `{"rev": N}`. Lần đầu tạo dòng `State` với `rev: 0` |
+| `state_pull` | `rev`: revision máy đang có, hoặc `null` | `{"rev": N, "blob": "..."}`, hoặc `{"rev": N, "unchanged": true}` |
+| `state_push` | `base_rev`, `blob` (≤1.400.000 ký tự) | `{"rev": N + 1}` |
+| `state_mail` | `code`: lệnh thêm máy (≤4.000 ký tự) | `{"mailed": true}`. Gửi tới chính `email`, không lưu `code` |
+
+| Mã lỗi | Ý nghĩa | Hành vi của `sync.py` |
+|---|---|---|
+| `claimed` | Email đã đăng ký bằng khoá khác | Hướng dẫn dùng `setup.py --export-device` |
+| `not_found` | Admin đã xoá dòng `State` | Đăng ký lại rồi đẩy bản local |
+| `bad_sync_key` | Khoá không khớp | Cảnh báo, bỏ qua |
+| `stale` | Máy khác vừa đẩy bản mới | Tải về rồi gộp |
+| `mail_limited` | Đã gửi mail trong 10 phút gần đây | Cảnh báo, đợi rồi thử lại |
+| `mail_failed` | `MailApp` từ chối gửi | Cảnh báo, gợi ý `setup.py --export-device` |
+
+Server chỉ lưu `sha256:<hex>` của `auth`, không lưu `auth`. Snapshot là tar.gz của các file đồng bộ, mã hoá bằng keystream HMAC-SHA256 theo counter, kèm thẻ HMAC-SHA256 trên ciphertext (`scripts/team/_vault.py`). Snapshot lớn hơn 1MB sau nén thì bỏ các artifact lớn nhất trước. File tiến độ luôn được giữ.
+
+Trên máy member:
+
+| File | Nội dung |
+|---|---|
+| `.team/config.json` | Thêm `sync_key`, `sync_claimed`, và `device_mailed` (đã gửi mail lệnh thêm máy chưa) |
+| `.team/sync.json` | Revision và dấu vân tay của lần đồng bộ gần nhất, cờ chờ gộp |
+| `.team/remote/` | Bản của máy khác cho các file hai máy cùng sửa |
+| `.team/backup/` | Bản local trước khi bị thay, giữ 5 bản gần nhất |
 
 ## Kiểm thử
 

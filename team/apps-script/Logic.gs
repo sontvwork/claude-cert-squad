@@ -1,5 +1,6 @@
 // Pure rules for the team progress backend: event validation, progress,
-// awards, the weekly ranking and message templates. Nothing here calls a
+// awards, the weekly ranking, message templates and the sync request and
+// chunk rules. Nothing here calls a
 // Google API, so test_logic.js runs this file under node. Code.gs reads the
 // Sheet into plain rows, calls these functions and writes the results back.
 // Event schema and award rules: team/README.md.
@@ -15,13 +16,22 @@ var ZONE_OFFSET_MS = 7 * 60 * 60 * 1000;
 var MOCK_PASS = 80;
 var DAY_TARGET = 3;
 var MEDALS = ['🥇', '🥈', '🥉'];
+var STATE_ACTIONS = ['state_claim', 'state_pull', 'state_push', 'state_mail'];
+var MAIL_GAP_MS = 10 * 60 * 1000; // one device-code mail per member every 10 minutes
+var DEVICE_CODE_MAX = 4000;
+var STATE_CHUNK_CHARS = 45000; // a Sheet cell holds at most 50000 characters
+var STATE_MAX_CHARS = 1400000; // 1 MB sealed archive, base64url
+var CHUNK_PREFIX = 'c:'; // keeps a chunk such as "-12e3" from being read as a number
+var HASH_PREFIX = 'sha256:';
 
 var SHEET_COLUMNS = {
   Events: ['received_at', 'id', 'ts', 'email', 'type', 'track', 'lesson', 'score', 'kind', 'payload'],
   Members: ['email', 'name', 'track', 'share', 'joined_at', 'last_activity'],
   Progress: ['email', 'track', 'done', 'total', 'pct', 'started_at', 'finished_at'],
   Awards: ['key', 'email', 'type', 'ts'],
-  Templates: ['situation', 'text']
+  Templates: ['situation', 'text'],
+  State: ['email', 'auth_hash', 'rev', 'updated_at', 'size', 'chunks', 'mailed_at'],
+  StateChunks: ['email', 'rev', 'idx', 'data']
 };
 
 // Starter messages. Rows in the Templates tab replace the defaults of their situation.
@@ -82,6 +92,86 @@ function validateEvent(event, config) {
     if (!isPercent_(data.score)) return fail_('bad_request', 'score must be between 0 and 100');
   }
   return {ok: true};
+}
+
+// Sync requests carry {action, token, email, auth} plus rev (pull), base_rev and blob (push) or code (mail).
+// The blob is sealed on the member's machine; the server only stores and returns it.
+function validateStateRequest(req, config) {
+  if (!req || typeof req !== 'object' || Array.isArray(req)) return fail_('bad_request', 'body must be a JSON object');
+  if (!config.token || req.token !== config.token) return fail_('bad_token', 'token rejected');
+  if (!isMemberEmail(req.email, config.domain)) return fail_('bad_domain', 'email must end with @' + config.domain);
+  if (STATE_ACTIONS.indexOf(req.action) < 0) return fail_('bad_request', 'unknown action ' + req.action);
+  if (typeof req.auth !== 'string' || !/^[0-9a-f]{64}$/.test(req.auth)) return fail_('bad_request', 'auth is invalid');
+  if (req.action === 'state_pull' && req.rev !== null && req.rev !== undefined && !isRevision_(req.rev)) {
+    return fail_('bad_request', 'rev is invalid');
+  }
+  if (req.action === 'state_push') {
+    if (!isRevision_(req.base_rev)) return fail_('bad_request', 'base_rev is invalid');
+    if (typeof req.blob !== 'string' || !/^[A-Za-z0-9_-]+$/.test(req.blob)) return fail_('bad_request', 'blob is invalid');
+    if (req.blob.length > STATE_MAX_CHARS) return fail_('bad_request', 'blob is larger than ' + STATE_MAX_CHARS + ' characters');
+  }
+  if (req.action === 'state_mail') {
+    if (typeof req.code !== 'string' || !/^[A-Za-z0-9_-]+$/.test(req.code) || req.code.length > DEVICE_CODE_MAX) {
+      return fail_('bad_request', 'code is invalid');
+    }
+  }
+  return {ok: true};
+}
+
+function mailAllowed(lastMailedAt, now) {
+  var last = lastMailedAt instanceof Date ? lastMailedAt.getTime() : Date.parse(lastMailedAt);
+  return isNaN(last) || now.getTime() - last >= MAIL_GAP_MS;
+}
+
+// The member's own add-a-machine command. The code holds their sync key, so it goes only to their inbox.
+function deviceMail(code) {
+  return {
+    subject: 'Mã thêm máy học chứng chỉ Claude',
+    body: [
+      'Chào bạn,',
+      '',
+      'Đồng bộ nhiều máy đã được bật cho tiến độ học của bạn.',
+      'Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:',
+      '',
+      'python3 scripts/team/setup.py --join ' + code,
+      '',
+      'Lệnh này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này và đừng dán lệnh vào Chat chung.',
+      'Muốn nhận lại mail này: chạy python3 scripts/team/setup.py --email-device trên máy đang học.'
+    ].join('\n')
+  };
+}
+
+function splitChunks(text, size) {
+  var parts = [];
+  for (var i = 0; i < text.length; i += size) parts.push(CHUNK_PREFIX + text.slice(i, i + size));
+  return parts;
+}
+
+// rows: [[idx, data]] in any order. Returns null when a chunk is missing or damaged.
+function joinChunks(rows, count) {
+  var parts = [];
+  rows.forEach(function (row) { parts[Number(row[0])] = String(row[1]); });
+  if (parts.length !== count) return null;
+  for (var i = 0; i < count; i++) {
+    if (typeof parts[i] !== 'string' || parts[i].indexOf(CHUNK_PREFIX) !== 0) return null;
+    parts[i] = parts[i].slice(CHUNK_PREFIX.length);
+  }
+  return parts.join('');
+}
+
+// Sorted row numbers to [start, length] runs, so contiguous rows are read or deleted in one call.
+function rowRuns(rows) {
+  var runs = [];
+  rows.slice().sort(function (a, b) { return a - b; }).forEach(function (row) {
+    var last = runs[runs.length - 1];
+    if (last && last[0] + last[1] === row) last[1] += 1;
+    else runs.push([row, 1]);
+  });
+  return runs;
+}
+
+function hashCell(bytes) {
+  return HASH_PREFIX + bytes.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
 }
 
 function isMemberEmail(email, domain) {
@@ -303,6 +393,10 @@ function percent_(done, total) {
 
 function round1_(value) {
   return Math.round(value * 10) / 10;
+}
+
+function isRevision_(value) {
+  return Number.isInteger(value) && value >= 0;
 }
 
 function isText_(value) {

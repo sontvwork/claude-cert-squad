@@ -25,6 +25,7 @@ LESSON_PREFIX = "certifications/claude/lessons/"
 DEFAULT_DOMAIN = "vti.com.vn"
 SCHEMA_VERSION = 1
 TIMEOUT_S = 10
+SYNC_TIMEOUT_S = 60
 PASS_RATIO = 0.7
 
 # Server errors that mean the event itself is wrong, so sending it again cannot help.
@@ -59,9 +60,29 @@ def paint(text, kind, stream=None, env=None):
     return f"\033[{ANSI[kind]}m{text}\033[0m"
 
 
-def encode_join_code(endpoint, token, domain):
-    payload = json.dumps({"endpoint": endpoint, "token": token, "domain": domain}, separators=(",", ":"))
+def encode_join_code(endpoint, token, domain, device=None):
+    """device adds email, name, share and sync_key, so a second machine joins as the same member."""
+    data = {"endpoint": endpoint, "token": token, "domain": domain, **(device or {})}
+    payload = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
     return base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def decode_device(code):
+    """Return {email, name, share, sync_key} when the code came from --export-device, else None."""
+    link = decode_join_code(code)
+    text = code.strip()
+    data = json.loads(base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode("utf-8"))
+    if not data.get("sync_key"):
+        return None
+    share = data.get("share")
+    if not isinstance(share, bool) or not isinstance(data.get("sync_key"), str):
+        raise TeamError("Mã thiết bị không hợp lệ. Chạy lại setup.py --export-device trên máy cũ.")
+    return {
+        "email": normalize_email(str(data.get("email", "")), link["domain"]),
+        "name": normalize_name(str(data.get("name", ""))),
+        "share": share,
+        "sync_key": data["sync_key"],
+    }
 
 
 def decode_join_code(code):
@@ -261,11 +282,15 @@ def read_lines(path):
     return events
 
 
-def write_lines(path, events):
+def write_text(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     staged = path.with_suffix(".tmp")
-    staged.write_text("".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events), encoding="utf-8")
+    staged.write_text(text, encoding="utf-8")
     staged.replace(path)
+
+
+def write_lines(path, events):
+    write_text(path, "".join(json.dumps(event, ensure_ascii=False) + "\n" for event in events))
 
 
 def append_outbox(event, team_dir=TEAM_DIR):
@@ -277,12 +302,16 @@ def append_outbox(event, team_dir=TEAM_DIR):
     return True
 
 
-def post_event(endpoint, event, token, timeout=TIMEOUT_S):
+def post_json(endpoint, body, timeout=TIMEOUT_S):
     # Apps Script answers a POST with a 302 to the result; urllib follows it with a GET.
-    body = json.dumps({**event, "token": token}, ensure_ascii=False).encode("utf-8")
-    request = urllib.request.Request(endpoint, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(endpoint, data=data, headers={"Content-Type": "application/json"}, method="POST")
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def post_event(endpoint, event, token, timeout=TIMEOUT_S):
+    return post_json(endpoint, {**event, "token": token}, timeout)
 
 
 def flush(config, team_dir=TEAM_DIR, send=post_event, say=print):

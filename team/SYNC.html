@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đồng bộ nhiều máy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --card: #ffffff;
+    --fg: #1d1f24;
+    --muted: #6a6f7a;
+    --line: #d9d7cf;
+    --blue: #2f6fdb;
+    --blue-soft: #e6eefc;
+    --green: #1e8a5a;
+    --green-soft: #e3f4ec;
+    --amber: #c27a00;
+    --amber-soft: #fdf1dc;
+    --violet: #7048c8;
+    --violet-soft: #efe9fb;
+    --red: #c4453a;
+    --red-soft: #fbe8e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a;
+      --card: #1d2026;
+      --fg: #e9eaee;
+      --muted: #9aa0ab;
+      --line: #343842;
+      --blue: #7ea8ff;
+      --blue-soft: #1f2b44;
+      --green: #5fd19b;
+      --green-soft: #183328;
+      --amber: #f2b84b;
+      --amber-soft: #382c14;
+      --violet: #b79bff;
+      --violet-soft: #2a2242;
+      --red: #ff8a7f;
+      --red-soft: #3a1f1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --card: #1d2026;
+    --fg: #e9eaee;
+    --muted: #9aa0ab;
+    --line: #343842;
+    --blue: #7ea8ff;
+    --blue-soft: #1f2b44;
+    --green: #5fd19b;
+    --green-soft: #183328;
+    --amber: #f2b84b;
+    --amber-soft: #382c14;
+    --violet: #b79bff;
+    --violet-soft: #2a2242;
+    --red: #ff8a7f;
+    --red-soft: #3a1f1d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  header h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); }
+  section { margin-top: 40px; }
+  h2 { font-size: 19px; margin: 0 0 14px; display: flex; gap: 10px; align-items: center; }
+  h2 .n {
+    display: inline-grid; place-items: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--fg); color: var(--bg); font-size: 14px;
+  }
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px;
+  }
+  .scroll { overflow-x: auto; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--fg); font-family: "Be Vietnam Pro", system-ui, sans-serif; }
+  svg .sub { fill: var(--muted); font-size: 12px; }
+  svg .lbl { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--card); stroke-width: 5px; }
+  svg .zone-t { font-size: 14px; font-weight: 600; }
+  svg .t { font-size: 15px; font-weight: 600; }
+  svg .wire { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+  svg .wire.dash { stroke-dasharray: 5 4; }
+  svg .life { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 5; }
+  svg .head { fill: var(--muted); }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card .ic { font-size: 26px; line-height: 1; }
+  .card b { font-size: 15px; }
+  .card .when { color: var(--muted); font-size: 13.5px; }
+  .chip {
+    align-self: flex-start; border-radius: 8px; padding: 3px 8px;
+    background: var(--blue-soft); color: var(--blue);
+  }
+  .badge { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; align-self: flex-start; }
+  .b-green { background: var(--green-soft); color: var(--green); }
+  .b-amber { background: var(--amber-soft); color: var(--amber); }
+  .b-violet { background: var(--violet-soft); color: var(--violet); }
+
+  .pipe { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+  .pipe li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; position: relative; padding-bottom: 14px; }
+  .pipe li::before {
+    content: ""; position: absolute; left: 17px; top: 30px; bottom: 0;
+    width: 2px; background: var(--line);
+  }
+  .pipe li:last-child::before { display: none; }
+  .pipe .dot {
+    width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--green-soft); color: var(--green); font-weight: 700; z-index: 1;
+  }
+  .pipe .body { padding-top: 6px; }
+  .pipe .x { color: var(--red); font-size: 13.5px; }
+  .pipe .ok { color: var(--muted); font-size: 13.5px; }
+
+  .chat { display: grid; gap: 10px; }
+  .bubble {
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px;
+    padding: 10px 14px; max-width: 560px; white-space: pre-line; overflow-wrap: anywhere;
+  }
+  .bubble small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  .bubble.term { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+  .note { color: var(--muted); font-size: 13.5px; margin: 10px 2px 0; }
+  footer { margin-top: 48px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>🔄 Học trên nhiều máy</h1>
+  <p>Máy công ty ⇄ Google Sheet ⇄ laptop ở nhà. Tiến độ đi theo bạn, đã mã hoá trước khi rời máy.</p>
+</header>
+
+<!-- 1. Tổng quan -->
+<section>
+  <h2><span class="n">1</span>Bức tranh tổng thể</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 420" role="img" aria-label="Hai máy của member cùng đẩy và tải bản tiến độ đã mã hoá qua Apps Script; Apps Script lưu vào tab State và StateChunks, và lần đầu gửi lệnh thêm máy vào email công ty">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+
+      <!-- Zone: máy công ty -->
+      <rect x="20" y="20" width="250" height="380" rx="18" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".35"/>
+      <text class="zone-t" x="40" y="50" style="fill:var(--blue)">🏢 Máy công ty</text>
+
+      <rect x="40" y="78" width="210" height="66" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="56" y="106">🤖 Tutor AI</text>
+      <text class="sub" x="56" y="128">gọi sync.py, record.py</text>
+
+      <rect x="40" y="190" width="210" height="60" rx="12" fill="var(--card)" stroke="var(--blue)" stroke-width="1.5"/>
+      <text class="t" x="56" y="216">🔐 sync.py</text>
+      <text class="sub" x="56" y="236">nén + mã hoá bằng sync_key</text>
+
+      <rect x="40" y="300" width="210" height="76" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="56" y="326">📄 File học tập</text>
+      <text class="sub" x="56" y="346">CLAUDE-CERTIFICATION.md</text>
+      <text class="sub" x="56" y="364">learning-artifacts/</text>
+
+      <path class="wire" d="M145 144V188" marker-end="url(#ah)"/>
+      <path class="wire" d="M145 252V298" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <text class="lbl" x="156" y="280">đọc ⇄ ghi</text>
+
+      <!-- Zone: Google -->
+      <rect x="300" y="20" width="400" height="380" rx="18" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".35"/>
+      <text class="zone-t" x="320" y="50" style="fill:var(--green)">☁️ Google Workspace</text>
+
+      <rect x="340" y="66" width="320" height="96" rx="12" fill="var(--card)" stroke="var(--violet)" stroke-width="1.5"/>
+      <text class="t" x="356" y="92">📊 Google Sheet</text>
+      <g font-size="12">
+        <rect x="356" y="104" width="84" height="26" rx="7" fill="var(--violet-soft)"/><text x="398" y="122" text-anchor="middle" style="fill:var(--violet)">State</text>
+        <rect x="446" y="104" width="100" height="26" rx="7" fill="var(--violet-soft)"/><text x="496" y="122" text-anchor="middle" style="fill:var(--violet)">StateChunks</text>
+      </g>
+      <text class="sub" x="356" y="150">chỉ chứa dữ liệu đã mã hoá 🔒</text>
+
+      <rect x="400" y="190" width="200" height="66" rx="12" fill="var(--card)" stroke="var(--green)" stroke-width="1.5"/>
+      <text class="t" x="416" y="218">⚡ Apps Script</text>
+      <text class="sub" x="416" y="240">claim · pull · push · mail</text>
+
+      <rect x="400" y="320" width="200" height="66" rx="12" fill="var(--card)" stroke="var(--amber)" stroke-width="1.5"/>
+      <text class="t" x="416" y="348">📧 Email công ty</text>
+      <text class="sub" x="416" y="370">hộp thư của chính bạn</text>
+
+      <path class="wire" d="M500 188V164" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <path class="wire dash" d="M500 258V318" marker-end="url(#ah)"/>
+      <text class="lbl" x="508" y="292">lần đầu: lệnh thêm máy</text>
+
+      <!-- Zone: máy ở nhà -->
+      <rect x="730" y="20" width="250" height="380" rx="18" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".35"/>
+      <text class="zone-t" x="750" y="50" style="fill:var(--blue)">🏠 Laptop ở nhà</text>
+
+      <rect x="750" y="78" width="210" height="66" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="766" y="106">🤖 Tutor AI</text>
+      <text class="sub" x="766" y="128">cùng skill, cùng repo</text>
+
+      <rect x="750" y="190" width="210" height="60" rx="12" fill="var(--card)" stroke="var(--blue)" stroke-width="1.5"/>
+      <text class="t" x="766" y="216">🔐 sync.py</text>
+      <text class="sub" x="766" y="236">cùng sync_key → mở được</text>
+
+      <rect x="750" y="300" width="210" height="76" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="766" y="326">📄 File học tập</text>
+      <text class="sub" x="766" y="346">giống hệt máy công ty</text>
+      <text class="sub" x="766" y="364">sau mỗi lần pull</text>
+
+      <path class="wire" d="M855 144V188" marker-end="url(#ah)"/>
+      <path class="wire" d="M855 252V298" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <text class="lbl" x="866" y="280">đọc ⇄ ghi</text>
+
+      <!-- wires máy ⇄ server -->
+      <path class="wire" d="M252 220H398" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <text class="lbl" x="325" y="210" text-anchor="middle">push ⇄ pull</text>
+      <path class="wire" d="M602 220H748" marker-start="url(#ah)" marker-end="url(#ah)"/>
+      <text class="lbl" x="675" y="210" text-anchor="middle">push ⇄ pull</text>
+
+      <path class="wire dash" d="M602 353C680 353 700 300 748 300" marker-end="url(#ah)"/>
+      <text class="lbl" x="662" y="378" text-anchor="middle">chạy lệnh trong mail</text>
+    </svg>
+  </div>
+</section>
+
+<!-- 2. Khi nào đồng bộ -->
+<section>
+  <h2><span class="n">2</span>Khi nào đồng bộ?</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="ic">⬇️</span>
+      <b>Đầu buổi học</b>
+      <span class="when">Tải bản mới nhất trước khi đọc tiến độ</span>
+      <code class="chip">sync.py pull</code>
+    </div>
+    <div class="card">
+      <span class="ic">✅</span>
+      <b>Xong bài, chọn track, làm mock</b>
+      <span class="when">record.py tự đẩy lên luôn</span>
+      <code class="chip">record.py …</code>
+    </div>
+    <div class="card">
+      <span class="ic">✏️</span>
+      <b>Ghi khác</b>
+      <span class="when">Status trung gian, artifact mới</span>
+      <code class="chip">sync.py push</code>
+    </div>
+    <div class="card">
+      <span class="ic">👋</span>
+      <b>Kết thúc buổi học</b>
+      <span class="when">Gửi nốt event + đẩy bản cuối</span>
+      <code class="chip">record.py flush</code>
+    </div>
+  </div>
+  <p class="note">💡 Tutor tự gọi các lệnh này. Gập máy giữa chừng cũng không mất, vì mỗi lần ghi là một lần đẩy.</p>
+</section>
+
+<!-- 3. Lần đầu -->
+<section>
+  <h2><span class="n">3</span>Lần đầu bật đồng bộ (máy đang học)</h2>
+  <div class="two">
+    <div class="panel">
+      <ol class="pipe">
+        <li><span class="dot">1</span><div class="body"><b>⬇️ git pull + mở lại tutor</b><br><span class="ok">việc duy nhất bạn phải làm</span></div></li>
+        <li><span class="dot">2</span><div class="body"><b>🔑 Sinh sync_key</b><br><span class="ok">32 byte ngẫu nhiên, lưu trong .team/config.json</span></div></li>
+        <li><span class="dot">3</span><div class="body"><b>🪪 Đăng ký email</b><br><span class="ok">server chỉ lưu hash, không lưu khoá</span><br><span class="x">✗ email đã đăng ký bằng khoá khác → dùng lệnh trong mail</span></div></li>
+        <li><span class="dot">4</span><div class="body"><b>📧 Gửi lệnh thêm máy</b><br><span class="ok">vào email công ty của bạn, 1 lần</span></div></li>
+        <li><span class="dot">5</span><div class="body"><b>📤 Đẩy bản đầu tiên</b><br><span class="ok">rev 1 = toàn bộ tiến độ đang có trên máy này</span></div></li>
+      </ol>
+    </div>
+    <div class="chat">
+      <div class="bubble term"><small>Tutor in ra</small>🔐 Team sync: đã bật đồng bộ nhiều máy.
+📧 Team sync: đã gửi lệnh thêm máy vào an.nguyen@vti.com.vn. Về máy khác, mở mail và chạy lệnh trong đó.
+☁️ Team sync: đã đồng bộ (rev 1).</div>
+      <div class="bubble"><small>📧 Mã thêm máy học chứng chỉ Claude</small>Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:
+<code>python3 scripts/team/setup.py --join eyJlbmRw…</code>
+⚠️ Lệnh này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Thêm máy ở nhà -->
+<section>
+  <h2><span class="n">4</span>Về nhà, mở laptop</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="ic">📬</span>
+      <b>1. Mở mail</b>
+      <span class="when">"Mã thêm máy học chứng chỉ Claude"</span>
+    </div>
+    <div class="card">
+      <span class="ic">📦</span>
+      <b>2. Clone repo</b>
+      <span class="when">Đã clone rồi thì <code>git pull</code></span>
+    </div>
+    <div class="card">
+      <span class="ic">⌨️</span>
+      <b>3. Chạy lệnh trong mail</b>
+      <span class="when">Tự điền email, tên, khoá, rồi tải tiến độ về</span>
+      <code class="chip">setup.py --join …</code>
+    </div>
+    <div class="card">
+      <span class="ic">🎓</span>
+      <b>4. Học tiếp</b>
+      <span class="when">Tutor mở đúng bài đang dở</span>
+      <span class="badge b-green">xong</span>
+    </div>
+  </div>
+  <div style="margin-top:14px">
+    <table>
+      <thead><tr><th>Laptop ở nhà</th><th>Chạy lệnh trong mail thì…</th></tr></thead>
+      <tbody>
+        <tr><td><b>Chưa từng join</b></td><td>Tải tiến độ về, không phải hỏi gì</td></tr>
+        <tr><td><b>Đã join, chưa học gì</b></td><td>Như trên</td></tr>
+        <tr><td><b>Đã join và đã học dở trước khi có đồng bộ</b></td><td>Lấy thêm file chỉ máy kia có. File hai bên cùng sửa → tutor gộp (mục 6)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">💡 Không thấy mail? Trên máy đang học: <code>setup.py --email-device</code> (gửi lại) hoặc <code>setup.py --export-device</code> (in lệnh ra).</p>
+</section>
+
+<!-- 5. Một ngày -->
+<section>
+  <h2><span class="n">5</span>Một ngày học trên 2 máy</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 420" role="img" aria-label="Sáng học ở công ty đẩy rev 2; tối laptop tải rev 2, học tiếp và đẩy rev 3; sáng hôm sau máy công ty tải rev 3">
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+
+      <rect x="150" y="16" width="180" height="48" rx="12" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".5"/>
+      <text class="t" x="240" y="46" text-anchor="middle">🏢 Máy công ty</text>
+      <rect x="440" y="16" width="180" height="48" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".5"/>
+      <text class="t" x="530" y="46" text-anchor="middle">⚡ Apps Script</text>
+      <rect x="730" y="16" width="180" height="48" rx="12" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".5"/>
+      <text class="t" x="820" y="46" text-anchor="middle">🏠 Laptop</text>
+
+      <path class="life" d="M240 66V410"/>
+      <path class="life" d="M530 66V410"/>
+      <path class="life" d="M820 66V410"/>
+
+      <text class="zone-t" x="20" y="112">☀️ Sáng</text>
+      <text class="sub" x="20" y="130">học bài 03</text>
+      <path class="wire" d="M242 118H526" marker-end="url(#ah2)"/>
+      <text class="lbl" x="384" y="110" text-anchor="middle">push · base rev 1</text>
+      <path class="wire dash" d="M528 144H244" marker-end="url(#ah2)"/>
+      <text class="lbl" x="384" y="162" text-anchor="middle">ok → rev 2</text>
+
+      <text class="zone-t" x="20" y="212">🌙 Tối</text>
+      <text class="sub" x="20" y="230">mở tutor ở nhà</text>
+      <path class="wire" d="M818 206H534" marker-end="url(#ah2)"/>
+      <text class="lbl" x="676" y="198" text-anchor="middle">pull · đang có rev 1</text>
+      <path class="wire dash" d="M532 232H816" marker-end="url(#ah2)"/>
+      <text class="lbl" x="676" y="250" text-anchor="middle">bản rev 2 → giải mã, ghi đè, lưu backup</text>
+      <path class="wire" d="M818 286H534" marker-end="url(#ah2)"/>
+      <text class="lbl" x="676" y="278" text-anchor="middle">học bài 04 → push · base rev 2</text>
+      <path class="wire dash" d="M532 310H816" marker-end="url(#ah2)"/>
+      <text class="lbl" x="676" y="328" text-anchor="middle">ok → rev 3</text>
+
+      <text class="zone-t" x="20" y="366">☀️ Hôm sau</text>
+      <text class="sub" x="20" y="384">mở tutor ở công ty</text>
+      <path class="wire" d="M242 360H526" marker-end="url(#ah2)"/>
+      <text class="lbl" x="384" y="352" text-anchor="middle">pull · đang có rev 2</text>
+      <path class="wire dash" d="M528 386H244" marker-end="url(#ah2)"/>
+      <text class="lbl" x="384" y="404" text-anchor="middle">bản rev 3 → bắt đầu bài 05</text>
+    </svg>
+  </div>
+  <p class="note">💡 Mỗi bản có số <b>rev</b> tăng dần. Server chỉ nhận push nếu máy đẩy lên đang đứng đúng rev mới nhất.</p>
+</section>
+
+<!-- 6. Xung đột -->
+<section>
+  <h2><span class="n">6</span>Quên đồng bộ, học ở cả 2 máy?</h2>
+  <div class="panel scroll">
+    <svg viewBox="0 0 1000 280" role="img" aria-label="Push bị từ chối vì máy khác đã đẩy bản mới; script tải về và so từng file; khác file thì tự gộp và push; cùng một file thì lưu bản kia vào .team/remote, tutor gộp rồi push --resolved">
+      <defs>
+        <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path class="head" d="M0 0L10 5L0 10z"/>
+        </marker>
+      </defs>
+      <rect x="20" y="80" width="160" height="64" rx="12" fill="var(--blue-soft)" stroke="var(--blue)" stroke-opacity=".5"/>
+      <text class="t" x="100" y="108" text-anchor="middle">📤 push</text>
+      <text class="sub" x="100" y="129" text-anchor="middle">base rev 3</text>
+
+      <rect x="230" y="80" width="190" height="64" rx="12" fill="var(--red-soft)" stroke="var(--red)" stroke-opacity=".6"/>
+      <text class="t" x="325" y="108" text-anchor="middle" style="fill:var(--red)">⛔ stale</text>
+      <text class="sub" x="325" y="129" text-anchor="middle">server đã ở rev 4</text>
+
+      <rect x="470" y="80" width="190" height="64" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="565" y="108" text-anchor="middle">🔍 Tải về, so file</text>
+      <text class="sub" x="565" y="129" text-anchor="middle">bản này vs bản server</text>
+
+      <rect x="720" y="16" width="260" height="64" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".6"/>
+      <text class="t" x="850" y="44" text-anchor="middle" style="fill:var(--green)">✅ Sửa file khác nhau</text>
+      <text class="sub" x="850" y="65" text-anchor="middle">tự lấy file mới về · push luôn</text>
+
+      <rect x="720" y="128" width="260" height="64" rx="12" fill="var(--amber-soft)" stroke="var(--amber)" stroke-opacity=".6"/>
+      <text class="t" x="850" y="156" text-anchor="middle" style="fill:var(--amber)">⚠️ Cùng sửa 1 file</text>
+      <text class="sub" x="850" y="177" text-anchor="middle">bản server → .team/remote/ · khoá push</text>
+
+      <rect x="470" y="208" width="190" height="56" rx="12" fill="var(--card)" stroke="var(--line)"/>
+      <text class="t" x="565" y="241" text-anchor="middle">🤖 Tutor gộp</text>
+
+      <rect x="230" y="208" width="190" height="56" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-opacity=".6"/>
+      <text class="t" x="325" y="236" text-anchor="middle" style="fill:var(--green)">📤 push --resolved</text>
+      <text class="sub" x="325" y="254" text-anchor="middle">→ rev 5</text>
+
+      <path class="wire" d="M182 112H228" marker-end="url(#ah3)"/>
+      <path class="wire" d="M422 112H468" marker-end="url(#ah3)"/>
+      <path class="wire" d="M662 102C690 102 690 48 718 48" marker-end="url(#ah3)"/>
+      <path class="wire" d="M662 122C690 122 690 160 718 160" marker-end="url(#ah3)"/>
+      <path class="wire" d="M850 194C850 236 760 236 662 236" marker-end="url(#ah3)"/>
+      <path class="wire" d="M468 236H422" marker-end="url(#ah3)"/>
+    </svg>
+  </div>
+  <div class="two" style="margin-top:14px">
+    <div class="panel">
+      <ol class="pipe">
+        <li><span class="dot">1</span><div class="body"><b>📋 Status từng bài</b><br><span class="ok">lấy mức cao hơn: Complete › Theory complete › Next › Pending</span></div></li>
+        <li><span class="dot">2</span><div class="body"><b>📝 Mock, diagnostic, review</b><br><span class="ok">giữ hết của cả hai máy, bỏ dòng trùng</span></div></li>
+        <li><span class="dot">3</span><div class="body"><b>🧩 Artifact khác nhau</b><br><span class="ok">tutor hỏi bạn giữ bản nào</span></div></li>
+      </ol>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <span class="ic">🛟</span>
+        <b>Không bao giờ mất</b>
+        <span class="when">File local không bị ghi đè khi xung đột</span>
+        <span class="badge b-green">an toàn</span>
+      </div>
+      <div class="card">
+        <span class="ic">🗂️</span>
+        <b>Có backup</b>
+        <span class="when">Trước khi ghi đè: <code>.team/backup/</code>, giữ 5 bản</span>
+        <span class="badge b-violet">tự động</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 7. Bảo mật -->
+<section>
+  <h2><span class="n">7</span>Ai đọc được gì?</h2>
+  <div class="two">
+    <table>
+      <thead><tr><th></th><th>Đọc tiến độ của bạn?</th></tr></thead>
+      <tbody>
+        <tr><td><b>👤 Máy của bạn</b> (có sync_key)</td><td>✅ đọc được</td></tr>
+        <tr><td><b>🛠️ Admin</b></td><td>🔒 chỉ thấy chuỗi đã mã hoá</td></tr>
+        <tr><td><b>👀 Người xem Sheet</b></td><td>🔒 chỉ thấy chuỗi đã mã hoá</td></tr>
+        <tr><td><b>🎫 Người có token chung</b></td><td>🔒 không tải được: sai khoá</td></tr>
+      </tbody>
+    </table>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card">
+        <span class="ic">🔑</span>
+        <b>sync_key</b>
+        <span class="when">Chỉ nằm trên máy của bạn và trong mail gửi riêng cho bạn</span>
+        <span class="badge b-amber">đừng chia sẻ</span>
+      </div>
+      <div class="card">
+        <span class="ic">🧾</span>
+        <b>Server lưu</b>
+        <span class="when">Hash để kiểm tra khoá + bản mã hoá mới nhất</span>
+        <span class="badge b-violet">không lưu khoá</span>
+      </div>
+      <div class="card">
+        <span class="ic">📧</span>
+        <b>Mail thêm máy</b>
+        <span class="when">Chỉ gửi tới chính email đã đăng ký, tối đa 1 mail / 10 phút</span>
+      </div>
+      <div class="card">
+        <span class="ic">📏</span>
+        <b>Giới hạn 1MB</b>
+        <span class="when">Vượt thì bỏ artifact lớn nhất, file tiến độ luôn giữ</span>
+      </div>
+    </div>
+  </div>
+  <p class="note">💡 Lỡ mất khoá? Nhờ admin xoá dòng của bạn trong tab <code>State</code>. Lần đồng bộ sau máy bạn tự đăng ký lại.</p>
+</section>
+
+<footer>Mã nguồn: <code>scripts/team/sync.py</code> · <code>scripts/team/_vault.py</code> · <code>team/apps-script/</code> · Hướng dẫn: <code>team/MEMBER.md</code> mục 3</footer>
+</main>
+</body>
+</html>

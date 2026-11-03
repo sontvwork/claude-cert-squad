@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import _common as team
 import record
+from test_sync import FakeSyncServer
 
 CONFIG = {
     "endpoint": "https://script.google.com/macros/s/abc/exec",
@@ -39,6 +40,7 @@ class RecordTest(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
         self.team_dir = Path(self.folder.name) / ".team"
+        self.sync_server = FakeSyncServer()
         team.save_config(CONFIG, self.team_dir)
 
     def tearDown(self):
@@ -47,7 +49,7 @@ class RecordTest(unittest.TestCase):
     def run_record(self, argv, server):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            code = record.main(argv, self.team_dir, send=server)
+            code = record.main(argv, self.team_dir, send=server, root=Path(self.folder.name), sync_send=self.sync_server)
         return code, out.getvalue(), err.getvalue()
 
     def outbox(self):
@@ -159,6 +161,21 @@ class RecordTest(unittest.TestCase):
         event = team.new_event(CONFIG, "track_started", team.load_track("ccdv-f"))
         self.assertRegex(event["ts"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d[+-]\d\d:\d\d$")
         self.assertEqual(json.loads(json.dumps(event))["v"], 1)
+
+
+class RecordSyncTest(unittest.TestCase):
+    def test_every_record_call_also_pushes_the_learner_state(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            team.save_config(CONFIG, root / ".team")
+            (root / "CLAUDE-CERTIFICATION.md").write_text("lesson 00 Complete", encoding="utf-8")
+            sync_server = FakeSyncServer()
+            with redirect_stdout(io.StringIO()):
+                record.main(["lesson-complete", "--track", "ccdv-f", "--lesson", FIRST_LESSON, "--quiz", "2/2"],
+                            root / ".team", send=FakeServer(), root=root, sync_send=sync_server)
+                record.main(["flush"], root / ".team", send=FakeServer(), root=root, sync_send=sync_server)
+            self.assertEqual(sync_server.calls, ["state_claim", "state_mail", "state_pull", "state_push"], "the second call has nothing new")
+            self.assertEqual(sync_server.members[CONFIG["email"]]["rev"], 1)
 
 
 if __name__ == "__main__":

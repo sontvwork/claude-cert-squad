@@ -175,3 +175,53 @@ test('member rows follow joins, share changes and track starts', () => {
   assert.equal(row[3], false);
   assert.equal(logic.localDay('2026-11-02T17:00:00Z'), '2026-11-03');
 });
+
+test('sync requests are checked before they touch the Sheet', () => {
+  const ok = {action: 'state_push', token: 'secret', email: AN, auth: 'f'.repeat(64), base_rev: 0, blob: 'abc_-9'};
+  assert.deepEqual(plain(logic.validateStateRequest(ok, CONFIG)), {ok: true});
+  assert.deepEqual(plain(logic.validateStateRequest({...ok, action: 'state_pull', rev: null}, CONFIG)), {ok: true});
+  const cases = [
+    [{token: 'x'}, 'bad_token'],
+    [{email: 'an@gmail.com'}, 'bad_domain'],
+    [{action: 'state_drop'}, 'bad_request'],
+    [{auth: 'F'.repeat(64)}, 'bad_request'],
+    [{base_rev: -1}, 'bad_request'],
+    [{blob: ''}, 'bad_request'],
+    [{blob: '=IMPORTXML(1)'}, 'bad_request'],
+    [{blob: 'a'.repeat(logic.STATE_MAX_CHARS + 1)}, 'bad_request'],
+    [{action: 'state_pull', rev: 1.5}, 'bad_request'],
+    [{action: 'state_mail'}, 'bad_request'],
+    [{action: 'state_mail', code: 'x'.repeat(4001)}, 'bad_request']
+  ];
+  for (const [change, error] of cases) {
+    assert.equal(logic.validateStateRequest({...ok, ...change}, CONFIG).error, error, JSON.stringify(change).slice(0, 80));
+  }
+});
+
+test('chunks split under the cell limit and join back only when complete', () => {
+  const text = 'ab'.repeat(10) + '-1';
+  const parts = plain(logic.splitChunks(text, 7));
+  assert.equal(parts.length, 4);
+  assert.ok(parts.every((part) => part.startsWith('c:') && part.length <= 9));
+  const rows = parts.map((part, index) => [index, part]).reverse();
+  assert.equal(logic.joinChunks(rows, 4), text);
+  assert.equal(logic.joinChunks(rows.slice(1), 4), null, 'a missing chunk');
+  assert.equal(logic.joinChunks([[0, '123']], 1), null, 'a cell the Sheet turned into a number');
+  assert.equal(logic.joinChunks([], 0), '');
+});
+
+test('row runs group contiguous rows and hashes render as prefixed hex', () => {
+  assert.deepEqual(plain(logic.rowRuns([9, 2, 3, 4, 7, 8])), [[2, 3], [7, 3]]);
+  assert.deepEqual(plain(logic.rowRuns([])), []);
+  assert.equal(logic.hashCell([0, 15, -1, 127]), 'sha256:000fff7f');
+});
+
+test('device mails wait 10 minutes and carry the join command', () => {
+  const now = new Date('2026-11-03T10:00:00Z');
+  assert.equal(logic.mailAllowed('', now), true);
+  assert.equal(logic.mailAllowed(new Date('2026-11-03T09:55:00Z'), now), false);
+  assert.equal(logic.mailAllowed(new Date('2026-11-03T09:50:00Z'), now), true);
+  const mail = logic.deviceMail('CODE123');
+  assert.match(mail.body, /setup\.py --join CODE123/);
+  assert.match(mail.body, /Đừng chuyển tiếp/);
+});
