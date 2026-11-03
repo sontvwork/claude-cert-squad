@@ -26,9 +26,10 @@ Không đưa giá trị nào ở trên vào repo. Repo là public.
 
 ## 2. Khởi tạo và deploy
 
-1. Trong editor, chọn hàm `setupSheets` rồi bấm **Run**. Lần đầu Google sẽ hỏi quyền. Hàm tạo các tab `Events`, `Members`, `Progress`, `Awards`, `Templates`, `Dashboard`. Chạy lại cũng không mất dữ liệu.
+1. Trong editor, chọn hàm `setupSheets` rồi bấm **Run**. Lần đầu Google sẽ hỏi quyền. Hàm tạo các tab `Events`, `Members`, `Progress`, `Awards`, `Templates`, `State`, `StateChunks`, `Dashboard`. Chạy lại cũng không mất dữ liệu.
 2. Chạy `testChat`. Space Chat phải nhận được một tin nhắn thử.
-3. Deploy:
+3. Chạy `testMail`. Google hỏi thêm quyền **Send email as you**, bấm **Allow**. Hộp thư của admin phải nhận được một mail thử. Web app dùng quyền này để gửi cho member lệnh thêm máy (mục 10). Nếu Workspace chặn quyền này, member vẫn lấy được lệnh bằng `setup.py --export-device`.
+4. Deploy:
    - Lần đầu: **Deploy → New deployment → Web app**, Execute as **Me**, Who has access **Anyone**.
    - Các lần sau, kể cả khi đã có deployment dùng để test:
      1. **Deploy → Manage deployments** (Triển khai → Quản lý các bản triển khai).
@@ -37,8 +38,8 @@ Không đưa giá trị nào ở trên vào repo. Repo là public.
      4. Ở ô **Version**, chọn **New version** (Phiên bản mới), rồi bấm **Deploy**.
 
      URL giữ nguyên nên member không phải tham gia lại.
-4. Chạy `installWeeklyTrigger` một lần. Trigger gọi `weeklySummary` vào Chủ nhật, trong khung 22h–23h theo time zone của project.
-5. Kiểm tra web app, kết quả phải là `{"ok":true,...}`:
+5. Chạy `installWeeklyTrigger` một lần. Trigger gọi `weeklySummary` vào Chủ nhật, trong khung 22h–23h theo time zone của project.
+6. Kiểm tra web app, kết quả phải là `{"ok":true,...}`:
 
 ```bash
 curl -sL "https://script.google.com/macros/s/<deployment-id>/exec"
@@ -62,10 +63,14 @@ Script hỏi URL Apps Script, `TEAM_TOKEN`, email domain, rồi in ra lệnh `se
 | `Awards` | `doPost`, `weeklySummary` | Khoá của mỗi lời khen đã gửi, để không khen trùng |
 | `Templates` | Admin sửa tay | Mẫu tin nhắn |
 | `Dashboard` | Công thức | Mỗi dòng là một cặp member × track, xếp theo % giảm dần, kèm biểu đồ "% route theo từng người" |
+| `State` | `doPost` | Mỗi member một dòng: hash của khoá đồng bộ, revision hiện tại, kích thước, lần gửi mail mã thêm máy gần nhất |
+| `StateChunks` | `doPost` | Snapshot đã mã hoá của revision hiện tại, cắt thành các ô ≤45k ký tự |
 
 Ai có quyền xem Sheet thì xem được mọi tab, kể cả điểm trong `Events`. Nếu chia sẻ Sheet cho cả team, hãy ẩn các tab dữ liệu và tắt quyền tải, in, sao chép của người xem. Lựa chọn share của member chỉ quyết định Dashboard và Chat có hiện điểm hay không.
 
 Nếu Dashboard bị sửa hỏng, chạy `rebuildDashboard` để dựng lại.
+
+Ẩn hai tab `State` và `StateChunks`, đừng sửa tay. Nội dung snapshot đã được mã hoá trên máy member, nên admin và người xem Sheet không đọc được.
 
 ### Xem thử Dashboard bằng dữ liệu giả
 
@@ -126,3 +131,24 @@ Không có lệnh hoàn tác. Xoá dòng sai trong tab `Events`, rồi chạy `r
 3. Member chạy lại `setup.py --join <mã mới>`. Event đang chờ trong outbox sẽ được gửi bằng token mới.
 
 Event lạ, nếu có, vẫn hiện trong tab `Events` để admin xoá.
+
+## 10. Đồng bộ nhiều máy
+
+Member học trên nhiều máy thì tutor tự đồng bộ `CLAUDE-CERTIFICATION.md` và `learning-artifacts/` qua chính web app này. Hướng dẫn cho member: [MEMBER.md](MEMBER.md#3-học-trên-nhiều-máy).
+
+### Nâng cấp khi team đang học
+
+1. Dán `Code.gs` và `Logic.gs` mới vào editor. Chạy `setupSheets` để tạo `State` và `StateChunks`. Chạy `testMail` để cấp quyền gửi mail. Rồi deploy **New version** trên deployment đang dùng (mục 2). Web app vẫn nhận event từ bản client cũ.
+2. Ghim thông báo trong Chat:
+
+   > 🔄 Tutor đã hỗ trợ học trên nhiều máy. Trên máy đang học, chạy `git pull` ở thư mục repo rồi mở lại session tutor. Đồng bộ sẽ tự bật và gửi vào email công ty một lệnh để thêm máy khác. Chi tiết: mục "Học trên nhiều máy" trong `team/MEMBER.md`.
+
+Nếu member cập nhật repo trước khi admin deploy, script báo "web app chưa hỗ trợ đồng bộ" rồi bỏ qua. Việc học không bị ảnh hưởng.
+
+### Member mất khoá hoặc bị chiếm email
+
+Xoá dòng của email đó trong tab `State`. Lần đồng bộ sau, máy của member đăng ký lại và đẩy bản trên máy lên. Các chunk cũ tự xoá khi đăng ký lại.
+
+Mail mã thêm máy chỉ gửi tới chính email đã đăng ký, tối đa 1 lần mỗi 10 phút. Web app không lưu và không ghi log mã này.
+
+Ai có token chung đều có thể đăng ký trước một email chưa bật đồng bộ. Họ không đọc được dữ liệu, vì dữ liệu được mã hoá bằng khoá của chủ email. Chủ email chỉ bị chặn đồng bộ cho đến khi admin xoá dòng.
