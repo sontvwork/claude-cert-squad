@@ -1,5 +1,6 @@
 // Apps Script entry points for the team progress backend: the web app,
-// Sheet reads and writes, Google Chat messages and the weekly trigger.
+// Sheet reads and writes, Google Chat messages, the weekly trigger and the
+// sealed learner-state snapshots behind multi-device sync.
 // The rules live in Logic.gs. Script Properties: TEAM_TOKEN, ALLOWED_DOMAIN,
 // CHAT_WEBHOOK_URL, and SHEET_ID when the script is not bound to the Sheet.
 // Setup, deployment and the event schema: team/README.md.
@@ -7,6 +8,7 @@
 var LOCK_WAIT_MS = 30000;
 var DASHBOARD_FIRST_ROW = 22;
 var DASHBOARD_ROWS = 40;
+var MAIL_SENDER = 'Claude Cert Squad';
 var HELPER_COLUMN = 26; // Z:AE, hidden: Progress sorted by pct (Z:AD) and the chart label (AE). Formulas name them.
 
 function doGet() {
@@ -32,6 +34,7 @@ function handlePost_(body) {
   } catch (err) {
     return {reply: {ok: false, error: 'bad_json'}, messages: []};
   }
+  if (event && typeof event === 'object' && event.action !== undefined) return handleState_(event);
   var props = PropertiesService.getScriptProperties();
   var check = validateEvent(event, {
     token: props.getProperty('TEAM_TOKEN'),
@@ -67,6 +70,69 @@ function recordEvent_(event, now) {
     if (award.situation) messages.push(renderTemplate(pickTemplate(templates, award.situation, Math.random), award.values));
   });
   return {reply: {ok: true, awards: awards.length}, messages: messages};
+}
+
+function handleState_(req) {
+  var props = PropertiesService.getScriptProperties();
+  var check = validateStateRequest(req, {
+    token: props.getProperty('TEAM_TOKEN'),
+    domain: String(props.getProperty('ALLOWED_DOMAIN') || '').trim().toLowerCase()
+  });
+  if (!check.ok) return {reply: check, messages: []};
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(LOCK_WAIT_MS)) return {reply: {ok: false, error: 'busy'}, messages: []};
+  try {
+    return {reply: stateReply_(book_(), req, new Date()), messages: []};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// One State row per member holds the hash of their auth value and the current revision.
+// StateChunks holds that revision's blob in pieces; older revisions are deleted after each push.
+function stateReply_(book, req, now) {
+  var states = tab_(book, 'State');
+  var chunks = tab_(book, 'StateChunks');
+  var hash = hashCell(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, req.auth, Utilities.Charset.UTF_8));
+  var found = findState_(states, req.email);
+
+  if (req.action === 'state_claim') {
+    if (found) return found.row[1] === hash ? {ok: true, rev: Number(found.row[2])} : fail_('claimed', 'email already has a sync key');
+    deleteChunks_(chunks, req.email, -1);
+    states.appendRow([req.email, hash, 0, now, 0, 0]);
+    return {ok: true, rev: 0, created: true};
+  }
+  if (!found) return fail_('not_found', 'sync is not set up for this email');
+  if (found.row[1] !== hash) return fail_('bad_sync_key', 'sync key rejected');
+  var rev = Number(found.row[2]);
+
+  if (req.action === 'state_mail') {
+    if (!mailAllowed(found.row[6], now)) return fail_('mail_limited', 'wait 10 minutes between device-code mails');
+    var mail = deviceMail(req.code);
+    try {
+      MailApp.sendEmail({to: req.email, subject: mail.subject, body: mail.body, name: MAIL_SENDER, noReply: true});
+    } catch (err) {
+      console.error('Device-code mail failed: ' + (err && err.message)); // never log the code
+      return fail_('mail_failed', 'mail was not sent');
+    }
+    states.getRange(found.index, 7).setValues([[now]]);
+    return {ok: true, mailed: true};
+  }
+
+  if (req.action === 'state_pull') {
+    if (req.rev === rev) return {ok: true, rev: rev, unchanged: true};
+    var blob = rev > 0 ? readChunks_(chunks, req.email, rev, Number(found.row[5])) : '';
+    if (blob === null) return fail_('server_error', 'snapshot chunks are missing');
+    return {ok: true, rev: rev, blob: blob};
+  }
+
+  if (req.base_rev !== rev) return {ok: false, error: 'stale', rev: rev};
+  var next = rev + 1;
+  var parts = splitChunks(req.blob, STATE_CHUNK_CHARS);
+  appendRows_(chunks, parts.map(function (part, index) { return [req.email, next, index, part]; }));
+  deleteChunks_(chunks, req.email, next);
+  states.getRange(found.index, 1, 1, 6).setValues([[req.email, hash, next, now, req.blob.length, parts.length]]);
+  return {ok: true, rev: next};
 }
 
 // Time trigger, Sunday 22:00-23:00. The window runs from the previous run to now, so no event is skipped.
@@ -133,6 +199,13 @@ function rebuildProgress() {
   } finally {
     lock.releaseLock();
   }
+}
+
+// Run once from the editor after pasting this version: Google asks for the "Send email as you" permission,
+// then one test mail reaches the admin's own inbox.
+function testMail() {
+  MailApp.sendEmail({to: Session.getEffectiveUser().getEmail(), subject: 'Thử gửi mail từ Claude Cert Squad',
+    body: 'Web app đã gửi được mail. Member sẽ nhận mã thêm máy qua đường này.', name: MAIL_SENDER, noReply: true});
 }
 
 // Run from the editor to send one test line to the Chat space.
@@ -223,6 +296,7 @@ function removeDemoRows_(book) {
 }
 
 function appendRows_(sheet, rows) {
+  if (!rows.length) return;
   sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
 }
 
@@ -342,6 +416,46 @@ function progressRow_(progress) {
     progress.email, progress.track, progress.done, progress.total, progress.pct,
     progress.startedAt ? new Date(progress.startedAt) : '', progress.finishedAt ? new Date(progress.finishedAt) : ''
   ];
+}
+
+function findState_(sheet, email) {
+  var rows = dataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i][0] === email) return {index: i + 2, row: rows[i]};
+  }
+  return null;
+}
+
+// Every StateChunks line of this email as {row, rev, idx}.
+function chunkRows_(sheet, email) {
+  var last = sheet.getLastRow();
+  if (last < 2) return [];
+  var rows = [];
+  sheet.getRange(2, 1, last - 1, 3).getValues().forEach(function (key, i) {
+    if (key[0] === email) rows.push({row: i + 2, rev: Number(key[1]), idx: Number(key[2])});
+  });
+  return rows;
+}
+
+function readChunks_(sheet, email, rev, count) {
+  var found = chunkRows_(sheet, email).filter(function (item) { return item.rev === rev; });
+  var idx = {};
+  found.forEach(function (item) { idx[item.row] = item.idx; });
+  var pieces = [];
+  rowRuns(found.map(function (item) { return item.row; })).forEach(function (run) {
+    sheet.getRange(run[0], 4, run[1], 1).getValues().forEach(function (value, offset) {
+      pieces.push([idx[run[0] + offset], value[0]]);
+    });
+  });
+  return joinChunks(pieces, count);
+}
+
+// Deletes every chunk of this email except revision keep. Bottom runs first, so row numbers stay valid.
+function deleteChunks_(sheet, email, keep) {
+  var rows = chunkRows_(sheet, email)
+    .filter(function (item) { return item.rev !== keep; })
+    .map(function (item) { return item.row; });
+  rowRuns(rows).reverse().forEach(function (run) { sheet.deleteRows(run[0], run[1]); });
 }
 
 function readEvents_(book) {

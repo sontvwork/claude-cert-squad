@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 
 // Runs Code.gs against in-memory stand-ins for the Google services it touches,
 // so a wiring mistake shows up here instead of in the first real request.
@@ -86,14 +87,19 @@ class FakeSheet {
     this.cells.splice(row - 1, 1);
   }
 
+  deleteRows(row, count) {
+    this.cells.splice(row - 1, count);
+  }
+
   setFrozenRows() {}
   setColumnWidth() {}
 }
 
-function load({chatStatus = 200} = {}) {
+function load({chatStatus = 200, mailFails = false} = {}) {
   const sheets = {};
   const properties = {TEAM_TOKEN: 'secret', ALLOWED_DOMAIN: 'VTI.com.vn', CHAT_WEBHOOK_URL: 'https://chat.example/hook'};
   const chat = [];
+  const mails = [];
   const book = {
     getSheetByName: (name) => sheets[name] || null,
     insertSheet: (name) => (sheets[name] = new FakeSheet(name))
@@ -112,6 +118,18 @@ function load({chatStatus = 200} = {}) {
       MimeType: {JSON: 'json'},
       createTextOutput: (text) => ({text, setMimeType() { return this; }})
     },
+    Utilities: {
+      DigestAlgorithm: {SHA_256: 'sha256'},
+      Charset: {UTF_8: 'utf8'},
+      // Apps Script returns signed bytes.
+      computeDigest: (algorithm, text) => Array.from(crypto.createHash(algorithm).update(text, 'utf8').digest(), (b) => (b > 127 ? b - 256 : b))
+    },
+    MailApp: {
+      sendEmail: (message) => {
+        if (mailFails) throw new Error('Service invoked too many times: email');
+        mails.push(message);
+      }
+    },
     UrlFetchApp: {
       fetch: (url, options) => {
         chat.push(JSON.parse(options.payload).text);
@@ -123,7 +141,7 @@ function load({chatStatus = 200} = {}) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, file), 'utf8'), context, {filename: file});
   }
   const post = (event) => JSON.parse(context.doPost({postData: {contents: JSON.stringify(event)}}).text);
-  return {context, sheets, properties, chat, post};
+  return {context, sheets, properties, chat, mails, post};
 }
 
 let sequence = 0;
@@ -256,4 +274,83 @@ test('rebuildDashboard refuses a locale whose formula separators are not commas'
   assert.throws(() => app.context.assertFormulaLocale_({getSpreadsheetLocale: () => 'vi_VN'}), /vi_VN.*United States/);
   assert.doesNotThrow(() => app.context.assertFormulaLocale_({getSpreadsheetLocale: () => 'en_US'}));
   assert.throws(() => app.context.rebuildDashboard(), /getSpreadsheetLocale|locale/i, 'the check runs before any Dashboard write');
+});
+
+const AUTH = 'a'.repeat(64);
+const state = (action, fields = {}) => ({action, token: 'secret', email: 'an.nguyen@vti.com.vn', auth: AUTH, ...fields});
+
+test('a member claims sync, pushes revisions and pulls the newest one back', () => {
+  const app = load();
+  assert.deepEqual(app.post(state('state_claim')), {ok: true, rev: 0, created: true});
+  assert.deepEqual(app.post(state('state_claim')), {ok: true, rev: 0}, 'claiming again with the same key is harmless');
+  assert.deepEqual(app.post(state('state_pull', {rev: null})), {ok: true, rev: 0, blob: ''});
+
+  assert.deepEqual(app.post(state('state_push', {base_rev: 0, blob: 'first'})), {ok: true, rev: 1});
+  const big = 'x'.repeat(100000) + '-12';
+  assert.deepEqual(app.post(state('state_push', {base_rev: 1, blob: big})), {ok: true, rev: 2});
+  assert.deepEqual(app.post(state('state_pull', {rev: 1})), {ok: true, rev: 2, blob: big});
+  assert.deepEqual(app.post(state('state_pull', {rev: 2})), {ok: true, rev: 2, unchanged: true});
+
+  const chunks = app.sheets.StateChunks.records();
+  assert.equal(chunks.length, 3, 'only revision 2 is kept, in three pieces');
+  assert.ok(chunks.every((row) => row[1] === 2 && row[3].startsWith('c:') && row[3].length <= 45002));
+  const row = app.sheets.State.records()[0];
+  assert.deepEqual(row.slice(2, 3).concat(row.slice(4, 6)), [2, big.length, 3]);
+  assert.match(row[1], /^sha256:[0-9a-f]{64}$/);
+  assert.ok(!JSON.stringify(app.sheets.State.records()).includes(AUTH), 'the auth value itself is not stored');
+});
+
+test('sync refuses another key, a stale base and an unknown email', () => {
+  const app = load();
+  assert.equal(app.post(state('state_pull')).error, 'not_found');
+  app.post(state('state_claim'));
+  const other = {auth: 'b'.repeat(64)};
+  assert.equal(app.post(state('state_claim', other)).error, 'claimed');
+  assert.equal(app.post(state('state_pull', other)).error, 'bad_sync_key');
+  assert.equal(app.post(state('state_push', {...other, base_rev: 0, blob: 'x'})).error, 'bad_sync_key');
+  app.post(state('state_push', {base_rev: 0, blob: 'one'}));
+  assert.deepEqual(app.post(state('state_push', {base_rev: 0, blob: 'two'})), {ok: false, error: 'stale', rev: 1});
+  assert.equal(app.post(state('state_pull', {token: 'old'})).error, 'bad_token');
+  assert.deepEqual(app.post(state('state_pull', {rev: null})).blob, 'one');
+});
+
+test('two members keep separate snapshots and a reclaim drops leftover chunks', () => {
+  const app = load();
+  const binh = {email: 'binh@vti.com.vn', auth: 'c'.repeat(64)};
+  app.post(state('state_claim'));
+  app.post(state('state_claim', binh));
+  app.post(state('state_push', {base_rev: 0, blob: 'an-1'}));
+  app.post(state('state_push', {...binh, base_rev: 0, blob: 'binh-1'}));
+  app.post(state('state_push', {base_rev: 1, blob: 'an-2'}));
+  assert.equal(app.post(state('state_pull', binh)).blob, 'binh-1');
+  assert.equal(app.post(state('state_pull')).blob, 'an-2');
+
+  app.sheets.State.deleteRow(2); // the admin resets An by deleting the State row
+  assert.equal(app.post(state('state_claim', {auth: 'd'.repeat(64)})).rev, 0);
+  assert.deepEqual(app.sheets.StateChunks.records().map((row) => row[0]), ['binh@vti.com.vn']);
+});
+
+test('a member mails themselves the add-a-machine command, at most once per 10 minutes', () => {
+  const app = load();
+  assert.equal(app.post(state('state_mail', {code: 'abc'})).error, 'not_found');
+  app.post(state('state_claim'));
+  assert.equal(app.post(state('state_mail', {code: 'abc', auth: 'b'.repeat(64)})).error, 'bad_sync_key');
+  assert.equal(app.post(state('state_mail', {code: 'a b'})).error, 'bad_request');
+  assert.deepEqual(app.post(state('state_mail', {code: 'eyJjb2RlIjoxfQ'})), {ok: true, mailed: true});
+  assert.equal(app.mails.length, 1);
+  assert.equal(app.mails[0].to, 'an.nguyen@vti.com.vn');
+  assert.equal(app.mails[0].noReply, true);
+  assert.match(app.mails[0].body, /python3 scripts\/team\/setup.py --join eyJjb2RlIjoxfQ/);
+  assert.equal(app.post(state('state_mail', {code: 'eyJjb2RlIjoxfQ'})).error, 'mail_limited');
+
+  app.post(state('state_push', {base_rev: 0, blob: 'one'}));
+  assert.equal(Object.prototype.toString.call(app.sheets.State.records()[0][6]), '[object Date]', 'a push keeps mailed_at');
+  assert.ok(!JSON.stringify(app.sheets).includes('eyJjb2RlIjoxfQ'), 'the code is never stored');
+});
+
+test('a mail the service refuses is reported and does not start the 10 minute wait', () => {
+  const app = load({mailFails: true});
+  app.post(state('state_claim'));
+  assert.equal(app.post(state('state_mail', {code: 'abc'})).error, 'mail_failed');
+  assert.equal(app.sheets.State.records()[0][6], '');
 });
