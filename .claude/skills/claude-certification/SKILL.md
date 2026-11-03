@@ -56,6 +56,9 @@ do not send them through the repository's book-generation pipeline.
 
 ## Select the mode
 
+Run `sync.py pull` from **Team progress** first, so state saved on the
+learner's other machine is here before you read it.
+
 1. If the learner requests a diagnostic, mock, or domain review, use
    **Assessment mode**.
 2. If `CLAUDE-CERTIFICATION.md` exists, use **Lesson mode** for the first
@@ -157,9 +160,11 @@ in every clone that has an active track:
 
 | When | Command |
 |------|---------|
+| The session starts, before reading `CLAUDE-CERTIFICATION.md` | `python3 scripts/team/sync.py pull` |
 | Onboarding confirms or changes the active track | `python3 scripts/team/record.py track-start --track <exam-code-lower>` |
 | A route lesson becomes `Complete` | `python3 scripts/team/record.py lesson-complete --track <exam-code-lower> --lesson <lesson-path> --quiz <N/M>` |
 | An assessment attempt is appended | `python3 scripts/team/record.py assessment --track <exam-code-lower> --kind <kind> --score <raw-percent> --domain <domain-id>=<percent>` |
+| Any other write to `CLAUDE-CERTIFICATION.md` or `learning-artifacts/` | `python3 scripts/team/sync.py push` |
 | The session closes | `python3 scripts/team/record.py flush` |
 
 - `--lesson` is the path exactly as the track's `lessons` array lists it.
@@ -171,7 +176,22 @@ in every clone that has an active track:
   not retry.
 - A non-zero exit means the arguments are wrong. Read the message, fix the
   command, and run it again.
-- Never print, edit, or commit anything under `.team/`.
+- `record.py` also pushes the learner state, so a write it covers needs no
+  extra `sync.py push`.
+- The first pull or push turns multi-device sync on by itself and mails the
+  learner the command that adds another machine. Relay its notices to the
+  learner. Never run `setup.py --export-device` for the learner, because its
+  output holds their sync key.
+- When `sync.py` reports files in `.team/remote/`, the learner changed the same
+  file on two machines. Merge each copy into the file of the same path at the
+  repository root: keep the further status of each route lesson (`Complete`,
+  then `Theory complete, lab pending`, then `Next`, then `Pending`), keep every
+  assessment attempt and review row from both copies without duplicates, and
+  ask the learner which version of an artifact to keep. Then run
+  `python3 scripts/team/sync.py push --resolved`. Never pass `--resolved`
+  before the merge is written.
+- Never print, edit, or commit anything under `.team/`, except reading the
+  copies in `.team/remote/` to merge them.
 
 ## Lesson screen
 
