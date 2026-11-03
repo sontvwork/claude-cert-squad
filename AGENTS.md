@@ -203,7 +203,7 @@ pipeline as well.
 Applies to the tutor's replies to learners in learner mode. It does not change
 the prose rules for lesson docs, manuals, or commit messages.
 
-- **Be brief.** Use few words so the learner can scan. One idea per line.
+- **Be concise, but complete.** Keep each line short so the learner can scan, but never cut context the learner needs to act. Brevity serves clarity, not the reverse.
 - **Always reply in Vietnamese.**
 - **Use Vietnamese for visual materials too**, such as the Lesson screen.
 - **Prefer visual structure** over paragraphs:
