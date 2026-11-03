@@ -2,6 +2,8 @@
 
     python3 scripts/team/setup.py --join <code>   first run, or after the admin rotates the token
     python3 scripts/team/setup.py --share off     hide quiz and mock scores, progress stays public
+    python3 scripts/team/setup.py --email-device  mail yourself the command that joins another machine as you
+    python3 scripts/team/setup.py --export-device print that command here instead
     python3 scripts/team/setup.py --make-code     admin only: build the join code to pin in Chat
 
 The config lands in .team/config.json, which git ignores. See team/README.md.
@@ -12,6 +14,7 @@ import getpass
 import sys
 
 import _common as team
+import sync
 
 
 def ask(prompt, check, read=input, say=print):
@@ -34,14 +37,20 @@ def summarize(config, left, say=print):
         say(team.paint("🎉 Từ giờ tiến độ sẽ tự động được ghi sau mỗi bài.", "ok"))
 
 
-def join(code, team_dir=team.TEAM_DIR, email=None, name=None, share=None, read=input, say=print, send=team.post_event):
+def join(code, team_dir=team.TEAM_DIR, email=None, name=None, share=None, read=input, say=print, send=team.post_event,
+         root=team.ROOT, sync_send=None):
     link = team.decode_join_code(code)
+    device = team.decode_device(code)
     domain = link["domain"]
     try:
         old = team.load_config(team_dir) or {}
     except team.TeamError:
         old = {}
     known = old.get("email") if str(old.get("email", "")).endswith("@" + domain) else None
+    if device:
+        email = device["email"] if email is None else email
+        name = device["name"] if name is None else name
+        share = device["share"] if share is None else share
 
     if email is not None:
         email = team.normalize_email(email, domain)
@@ -67,10 +76,18 @@ def join(code, team_dir=team.TEAM_DIR, email=None, name=None, share=None, read=i
         )
 
     config = {**link, "email": email, "name": name, "share": share}
+    if device and device["email"] == email:
+        config.update(sync_key=device["sync_key"], sync_claimed=True, device_mailed=True)
+    elif old.get("email") == email and old.get("sync_key"):
+        config.update({key: old[key] for key in ("sync_key", "sync_claimed", "device_mailed") if key in old})
+    if config.get("sync_key") != old.get("sync_key") or old.get("email") != email:
+        sync.forget(team_dir)
     team.save_config(config, team_dir)
     team.append_outbox(team.new_event(config, "member_joined", data={"name": name, "share": share}), team_dir)
     sent, left = team.flush(config, team_dir, send, say)
     summarize(config, left, say)
+    if sync_send:
+        sync.pull(config, root, team_dir, sync_send, say)
     return config
 
 
@@ -83,6 +100,32 @@ def change_share(value, team_dir=team.TEAM_DIR, say=print, send=team.post_event)
     team.append_outbox(team.new_event(config, "share_changed", data={"share": config["share"]}), team_dir)
     team.flush(config, team_dir, send, say)
     say(team.paint(f"📊 Chia sẻ điểm: {'bật' if config['share'] else 'tắt'}. Tiến độ vẫn công khai.", "ok"))
+    return config
+
+
+def synced_config(team_dir, send, say):
+    config = team.load_config(team_dir)
+    if config is None:
+        raise team.TeamError("Chưa tham gia team. Chạy setup.py --join <mã> trước.")
+    config["device_mailed"] = True  # this command handles the mail itself
+    if not sync.ensure_claimed(config, team_dir, send, say):
+        raise team.TeamError("Chưa bật được đồng bộ, xem cảnh báo ở trên.")
+    return config
+
+
+def export_device(team_dir=team.TEAM_DIR, say=print, send=sync.post_slow):
+    config = synced_config(team_dir, send, say)
+    code = sync.device_code(config)
+    say(team.paint("🔑 Mã này chứa khoá đồng bộ riêng của bạn. Đừng dán vào Chat chung.", "warn"))
+    say("💻 Chạy lệnh sau ở thư mục gốc repo trên máy mới:")
+    say(f"python3 scripts/team/setup.py --join {code}")
+    return code
+
+
+def email_device(team_dir=team.TEAM_DIR, say=print, send=sync.post_slow):
+    config = synced_config(team_dir, send, say)
+    if not sync.mail_device(config, team_dir, send, say):
+        raise team.TeamError("Chưa gửi được mail. Dùng setup.py --export-device để lấy lệnh ngay tại đây.")
     return config
 
 
@@ -101,6 +144,8 @@ def parser():
     mode = root.add_mutually_exclusive_group()
     mode.add_argument("--join", metavar="CODE", help="join code pinned in the team Chat space")
     mode.add_argument("--make-code", action="store_true", help="admin: build a join code")
+    mode.add_argument("--email-device", action="store_true", help="mail yourself the command that joins another machine as you")
+    mode.add_argument("--export-device", action="store_true", help="print the command that joins another machine as you")
     root.add_argument("--share", choices=["on", "off"], help="share quiz and mock scores")
     root.add_argument("--email", help="skip the email prompt")
     root.add_argument("--name", help="skip the display name prompt")
@@ -112,9 +157,13 @@ def main(argv=None, team_dir=team.TEAM_DIR):
     try:
         if args.make_code:
             make_code()
+        elif args.email_device:
+            email_device(team_dir)
+        elif args.export_device:
+            export_device(team_dir)
         elif args.join:
             share = None if args.share is None else args.share == "on"
-            join(args.join, team_dir, args.email, args.name, share)
+            join(args.join, team_dir, args.email, args.name, share, sync_send=sync.post_slow)
         elif args.share:
             change_share(args.share, team_dir)
         else:

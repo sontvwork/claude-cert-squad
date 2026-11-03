@@ -1,15 +1,17 @@
 """Record one certification progress event for the study team.
 
 The claude-certification tutor runs this right after it updates
-CLAUDE-CERTIFICATION.md. Wrong arguments exit 2 so the agent can fix the
-command. A clone without .team/config.json, or a network failure, prints one
-line and exits 0, so a lesson never stops on it. See team/README.md.
+CLAUDE-CERTIFICATION.md, then pushes the learner state with sync.py. Wrong
+arguments exit 2 so the agent can fix the command. A clone without
+.team/config.json, or a network failure, prints one line and exits 0, so a
+lesson never stops on it. See team/README.md.
 """
 
 import argparse
 import sys
 
 import _common as team
+import sync
 
 
 def parser():
@@ -53,7 +55,7 @@ def build_event(args, config, tracks_dir=team.TRACKS_DIR):
     return team.new_event(config, "assessment_attempted", track, data)
 
 
-def main(argv=None, team_dir=team.TEAM_DIR, tracks_dir=team.TRACKS_DIR, send=team.post_event):
+def main(argv=None, team_dir=team.TEAM_DIR, tracks_dir=team.TRACKS_DIR, send=team.post_event, root=team.ROOT, sync_send=sync.post_slow):
     args = parser().parse_args(argv)
     try:
         config = team.load_config(team_dir)
@@ -75,6 +77,7 @@ def main(argv=None, team_dir=team.TEAM_DIR, tracks_dir=team.TRACKS_DIR, send=tea
         print(f"Team progress: đã ghi {event['type']} ({event['track']}).")
     elif not event:
         print(f"Team progress: đã gửi {sent} event, còn {left} event chờ.")
+    sync.push(config, root, team_dir, sync_send)
     return 0
 
 
