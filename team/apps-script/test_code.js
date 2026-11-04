@@ -340,7 +340,8 @@ test('a member mails themselves the add-a-machine command, at most once per 10 m
   assert.equal(app.mails.length, 1);
   assert.equal(app.mails[0].to, 'an.nguyen@vti.com.vn');
   assert.equal(app.mails[0].noReply, true);
-  assert.match(app.mails[0].body, /python3 scripts\/team\/setup.py --join eyJjb2RlIjoxfQ/);
+  assert.match(app.mails[0].body, /eyJjb2RlIjoxfQ/);
+  assert.match(app.mails[0].htmlBody, /<pre[^>]*>eyJjb2RlIjoxfQ<\/pre>/);
   assert.equal(app.post(state('state_mail', {code: 'eyJjb2RlIjoxfQ'})).error, 'mail_limited');
 
   app.post(state('state_push', {base_rev: 0, blob: 'one'}));

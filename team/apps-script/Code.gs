@@ -110,7 +110,7 @@ function stateReply_(book, req, now) {
     if (!mailAllowed(found.row[6], now)) return fail_('mail_limited', 'wait 10 minutes between device-code mails');
     var mail = deviceMail(req.code);
     try {
-      MailApp.sendEmail({to: req.email, subject: mail.subject, body: mail.body, name: MAIL_SENDER, noReply: true});
+      MailApp.sendEmail({to: req.email, subject: mail.subject, body: mail.body, htmlBody: mail.htmlBody, name: MAIL_SENDER, noReply: true});
     } catch (err) {
       console.error('Device-code mail failed: ' + (err && err.message)); // never log the code
       return fail_('mail_failed', 'mail was not sent');

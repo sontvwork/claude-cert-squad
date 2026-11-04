@@ -19,6 +19,8 @@ var MEDALS = ['🥇', '🥈', '🥉'];
 var STATE_ACTIONS = ['state_claim', 'state_pull', 'state_push', 'state_mail'];
 var MAIL_GAP_MS = 10 * 60 * 1000; // one device-code mail per member every 10 minutes
 var DEVICE_CODE_MAX = 4000;
+var DEVICE_COMMAND = 'python3 scripts/team/setup.py --join';
+var CODE_STYLE = 'white-space:pre-wrap;word-break:break-all;background:#f1f3f4;padding:10px;border-radius:6px';
 var STATE_CHUNK_CHARS = 45000; // a Sheet cell holds at most 50000 characters
 var STATE_MAX_CHARS = 1400000; // 1 MB sealed archive, base64url
 var CHUNK_PREFIX = 'c:'; // keeps a chunk such as "-12e3" from being read as a number
@@ -123,7 +125,8 @@ function mailAllowed(lastMailedAt, now) {
   return isNaN(last) || now.getTime() - last >= MAIL_GAP_MS;
 }
 
-// The member's own add-a-machine command. The code holds their sync key, so it goes only to their inbox.
+// The member's own add-a-machine steps. The code holds their sync key, so it goes only to their inbox.
+// The command and the code stay apart: mail clients wrap long lines, and a wrapped command breaks in the shell.
 function deviceMail(code) {
   return {
     subject: 'Mã thêm máy học chứng chỉ Claude',
@@ -131,13 +134,27 @@ function deviceMail(code) {
       'Chào bạn,',
       '',
       'Đồng bộ nhiều máy đã được bật cho tiến độ học của bạn.',
-      'Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:',
+      'Bước 1. Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:',
       '',
-      'python3 scripts/team/setup.py --join ' + code,
+      DEVICE_COMMAND,
       '',
-      'Lệnh này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này và đừng dán lệnh vào Chat chung.',
+      'Bước 2. Khi được hỏi, dán mã sau rồi bấm Enter:',
+      '',
+      code,
+      '',
+      'Mã này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này và đừng dán mã vào Chat chung.',
       'Muốn nhận lại mail này: chạy python3 scripts/team/setup.py --email-device trên máy đang học.'
-    ].join('\n')
+    ].join('\n'),
+    htmlBody: [
+      '<p>Chào bạn,</p>',
+      '<p>Đồng bộ nhiều máy đã được bật cho tiến độ học của bạn.</p>',
+      '<p><b>Bước 1.</b> Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:</p>',
+      '<pre style="' + CODE_STYLE + '">' + DEVICE_COMMAND + '</pre>',
+      '<p><b>Bước 2.</b> Khi được hỏi, dán mã sau rồi bấm Enter:</p>',
+      '<pre style="' + CODE_STYLE + '">' + code + '</pre>',
+      '<p>Mã này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này và đừng dán mã vào Chat chung.</p>',
+      '<p>Muốn nhận lại mail này: chạy <code>python3 scripts/team/setup.py --email-device</code> trên máy đang học.</p>'
+    ].join('')
   };
 }
 

@@ -41,6 +41,24 @@ class SetupTest(unittest.TestCase):
         self.assertNotIn("=", CODE)
         self.assertEqual(team.decode_join_code(f"  {CODE}\n"), {"endpoint": ENDPOINT, "token": "secret", "domain": "vti.com.vn"})
 
+    def test_a_code_split_by_a_mail_client_still_decodes(self):
+        split = "\n".join(CODE[i:i + 20] for i in range(0, len(CODE), 20))
+        self.assertEqual(team.decode_join_code(f"{split}\n")["token"], "secret")
+
+    def test_the_prompt_reads_a_pasted_code_across_lines(self):
+        middle = len(CODE) // 2
+        self.assertEqual(setup.read_code(answers(CODE), self.said.append), CODE)
+        self.assertEqual(setup.read_code(answers(f" {CODE[:middle]} ", CODE[middle:]), self.said.append), CODE)
+
+    def test_the_prompt_gives_up_on_a_blank_line(self):
+        with self.assertRaises(team.TeamError):
+            setup.read_code(answers(CODE[:10], ""), self.said.append)
+
+    def test_join_without_a_code_is_accepted_by_the_parser(self):
+        self.assertEqual(setup.parser().parse_args(["--join"]).join, "")
+        self.assertEqual(setup.parser().parse_args(["--join", "abc"]).join, "abc")
+        self.assertIsNone(setup.parser().parse_args(["--share", "on"]).join)
+
     def test_broken_or_unsafe_join_codes_are_rejected(self):
         for code in ("not-a-code", CODE[:-6], team.encode_join_code("http://example.com/exec", "secret", "vti.com.vn"),
                      team.encode_join_code(ENDPOINT, "", "vti.com.vn"), team.encode_join_code(ENDPOINT, "secret", "nodot")):
