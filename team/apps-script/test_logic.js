@@ -222,6 +222,8 @@ test('device mails wait 10 minutes and carry the join command', () => {
   assert.equal(logic.mailAllowed(new Date('2026-11-03T09:55:00Z'), now), false);
   assert.equal(logic.mailAllowed(new Date('2026-11-03T09:50:00Z'), now), true);
   const mail = logic.deviceMail('CODE123');
-  assert.match(mail.body, /setup\.py --join CODE123/);
+  assert.match(mail.body, /setup\.py --join\n/, 'the command ends its own line');
+  assert.match(mail.body, /\nCODE123\n/, 'the code sits on its own line, away from the command');
+  assert.doesNotMatch(mail.htmlBody, /--join CODE123/);
   assert.match(mail.body, /Đừng chuyển tiếp/);
 });

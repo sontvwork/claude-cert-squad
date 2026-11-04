@@ -21,15 +21,15 @@ Muốn đổi tên hoặc email thì chạy lại lệnh join.
 Tutor tự đồng bộ `CLAUDE-CERTIFICATION.md` và `learning-artifacts/` giữa các máy của bạn. Lần đầu tutor chạy trên máy đang học, đồng bộ tự bật:
 
 - 🔐 Tutor in `Team sync: đã bật đồng bộ nhiều máy`.
-- 📧 Hộp thư công ty nhận mail **"Mã thêm máy học chứng chỉ Claude"**, trong đó có lệnh `setup.py --join ...`.
+- 📧 Hộp thư công ty nhận mail **"Mã thêm máy học chứng chỉ Claude"**, trong đó có lệnh và mã để thêm máy.
 
 Thêm một máy mới, ví dụ laptop ở nhà:
 
 1. Clone repo.
-2. Mở mail trên, chạy lệnh trong mail ở thư mục gốc repo. Không cần chạy lại lệnh join đang ghim trong Chat.
+2. Mở mail trên. Ở thư mục gốc repo, chạy `python3 scripts/team/setup.py --join`, rồi dán mã trong mail khi được hỏi. Không cần chạy lại lệnh join đang ghim trong Chat.
 3. Mở tutor như bình thường. Tiến độ đã có sẵn.
 
-Lệnh trong mail chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail và đừng dán lệnh vào Chat chung.
+Mã trong mail chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail và đừng dán mã vào Chat chung.
 
 Không thấy mail thì chạy một trong hai lệnh sau trên máy đang học:
 
@@ -50,7 +50,7 @@ Trước khi tải bản từ máy khác về, script lưu bản cũ vào `.team
 
 1. Chạy `git pull` ở thư mục repo trên máy đang học.
 2. Mở lại session tutor. Đồng bộ tự bật.
-3. Nếu máy thứ hai cũng đã học dở, chạy lệnh trong mail trên máy thứ hai. Tutor sẽ gộp tiến độ của hai máy.
+3. Nếu máy thứ hai cũng đã học dở, làm theo mail trên máy thứ hai. Tutor sẽ gộp tiến độ của hai máy.
 
 ## 4. Khác
 

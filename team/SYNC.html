@@ -238,7 +238,7 @@
       <text class="lbl" x="675" y="210" text-anchor="middle">push ⇄ pull</text>
 
       <path class="wire dash" d="M602 353C680 353 700 300 748 300" marker-end="url(#ah)"/>
-      <text class="lbl" x="662" y="378" text-anchor="middle">chạy lệnh trong mail</text>
+      <text class="lbl" x="662" y="378" text-anchor="middle">dán mã trong mail</text>
     </svg>
   </div>
 </section>
@@ -283,18 +283,20 @@
       <ol class="pipe">
         <li><span class="dot">1</span><div class="body"><b>⬇️ git pull + mở lại tutor</b><br><span class="ok">việc duy nhất bạn phải làm</span></div></li>
         <li><span class="dot">2</span><div class="body"><b>🔑 Sinh sync_key</b><br><span class="ok">32 byte ngẫu nhiên, lưu trong .team/config.json</span></div></li>
-        <li><span class="dot">3</span><div class="body"><b>🪪 Đăng ký email</b><br><span class="ok">server chỉ lưu hash, không lưu khoá</span><br><span class="x">✗ email đã đăng ký bằng khoá khác → dùng lệnh trong mail</span></div></li>
+        <li><span class="dot">3</span><div class="body"><b>🪪 Đăng ký email</b><br><span class="ok">server chỉ lưu hash, không lưu khoá</span><br><span class="x">✗ email đã đăng ký bằng khoá khác → dùng mã trong mail</span></div></li>
         <li><span class="dot">4</span><div class="body"><b>📧 Gửi lệnh thêm máy</b><br><span class="ok">vào email công ty của bạn, 1 lần</span></div></li>
         <li><span class="dot">5</span><div class="body"><b>📤 Đẩy bản đầu tiên</b><br><span class="ok">rev 1 = toàn bộ tiến độ đang có trên máy này</span></div></li>
       </ol>
     </div>
     <div class="chat">
       <div class="bubble term"><small>Tutor in ra</small>🔐 Team sync: đã bật đồng bộ nhiều máy.
-📧 Team sync: đã gửi lệnh thêm máy vào an.nguyen@vti.com.vn. Về máy khác, mở mail và chạy lệnh trong đó.
+📧 Team sync: đã gửi lệnh thêm máy vào an.nguyen@vti.com.vn. Về máy khác, mở mail và làm theo hướng dẫn trong đó.
 ☁️ Team sync: đã đồng bộ (rev 1).</div>
-      <div class="bubble"><small>📧 Mã thêm máy học chứng chỉ Claude</small>Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:
-<code>python3 scripts/team/setup.py --join eyJlbmRw…</code>
-⚠️ Lệnh này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này.</div>
+      <div class="bubble"><small>📧 Mã thêm máy học chứng chỉ Claude</small>Bước 1. Trên máy mới, clone repo rồi chạy lệnh sau ở thư mục gốc repo:
+<code>python3 scripts/team/setup.py --join</code>
+Bước 2. Khi được hỏi, dán mã sau rồi bấm Enter:
+<code>eyJlbmRw…</code>
+⚠️ Mã này chứa khoá đồng bộ riêng của bạn. Đừng chuyển tiếp mail này.</div>
     </div>
   </div>
 </section>
@@ -315,9 +317,9 @@
     </div>
     <div class="card">
       <span class="ic">⌨️</span>
-      <b>3. Chạy lệnh trong mail</b>
+      <b>3. Chạy lệnh, dán mã trong mail</b>
       <span class="when">Tự điền email, tên, khoá, rồi tải tiến độ về</span>
-      <code class="chip">setup.py --join …</code>
+      <code class="chip">setup.py --join</code>
     </div>
     <div class="card">
       <span class="ic">🎓</span>
@@ -328,7 +330,7 @@
   </div>
   <div style="margin-top:14px">
     <table>
-      <thead><tr><th>Laptop ở nhà</th><th>Chạy lệnh trong mail thì…</th></tr></thead>
+      <thead><tr><th>Laptop ở nhà</th><th>Dán mã trong mail thì…</th></tr></thead>
       <tbody>
         <tr><td><b>Chưa từng join</b></td><td>Tải tiến độ về, không phải hỏi gì</td></tr>
         <tr><td><b>Đã join, chưa học gì</b></td><td>Như trên</td></tr>

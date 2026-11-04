@@ -1,6 +1,7 @@
 """Join the study team so the certification tutor can report progress.
 
     python3 scripts/team/setup.py --join <code>   first run, or after the admin rotates the token
+    python3 scripts/team/setup.py --join          ask for the code, safe for a code split across lines
     python3 scripts/team/setup.py --share off     hide quiz and mock scores, progress stays public
     python3 scripts/team/setup.py --email-device  mail yourself the command that joins another machine as you
     python3 scripts/team/setup.py --export-device print that command here instead
@@ -23,6 +24,22 @@ def ask(prompt, check, read=input, say=print):
             return check(read(prompt))
         except team.TeamError as error:
             say(team.paint(f"❌ {error}", "error"))
+
+
+def read_code(read=input, say=print):
+    """Collect pasted lines until they form a whole code. A blank line gives up."""
+    say("📋 Dán mã vào đây rồi bấm Enter:")
+    code = ""
+    while True:
+        line = "".join(read("").split())
+        if not line:
+            raise team.TeamError("Chưa nhận đủ mã. Copy lại toàn bộ mã rồi chạy lại lệnh.")
+        code += line
+        try:
+            team.decode_join_code(code)
+            return code
+        except team.TeamError:
+            continue
 
 
 def summarize(config, left, say=print):
@@ -142,7 +159,7 @@ def make_code(read=input, secret=getpass.getpass, say=print):
 def parser():
     root = argparse.ArgumentParser(prog="setup.py", description="Join the certification study team.")
     mode = root.add_mutually_exclusive_group()
-    mode.add_argument("--join", metavar="CODE", help="join code pinned in the team Chat space")
+    mode.add_argument("--join", metavar="CODE", nargs="?", const="", help="join code; leave it out to paste it at a prompt")
     mode.add_argument("--make-code", action="store_true", help="admin: build a join code")
     mode.add_argument("--email-device", action="store_true", help="mail yourself the command that joins another machine as you")
     mode.add_argument("--export-device", action="store_true", help="print the command that joins another machine as you")
@@ -161,9 +178,9 @@ def main(argv=None, team_dir=team.TEAM_DIR):
             email_device(team_dir)
         elif args.export_device:
             export_device(team_dir)
-        elif args.join:
+        elif args.join is not None:
             share = None if args.share is None else args.share == "on"
-            join(args.join, team_dir, args.email, args.name, share, sync_send=sync.post_slow)
+            join(args.join or read_code(), team_dir, args.email, args.name, share, sync_send=sync.post_slow)
         elif args.share:
             change_share(args.share, team_dir)
         else:

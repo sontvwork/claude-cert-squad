@@ -96,7 +96,7 @@ def mail_device(config, team_dir, send, say):
         return False
     config["device_mailed"] = True
     team.save_config(config, team_dir)
-    say(team.paint(f"📧 Team sync: đã gửi lệnh thêm máy vào {config['email']}. Về máy khác, mở mail và chạy lệnh trong đó.", "ok"))
+    say(team.paint(f"📧 Team sync: đã gửi lệnh thêm máy vào {config['email']}. Về máy khác, mở mail và làm theo hướng dẫn trong đó.", "ok"))
     return True
 
 
@@ -122,7 +122,7 @@ def ensure_claimed(config, team_dir, send, say):
         return True
     if reply.get("error") == "claimed":
         warn(say, "email này đã bật đồng bộ ở máy khác. Mở mail \"Mã thêm máy học chứng chỉ Claude\" trong hộp thư công ty "
-                  "và chạy lệnh trong đó. Không thấy mail thì chạy setup.py --email-device trên máy kia.")
+                  "và làm theo hướng dẫn trong đó. Không thấy mail thì chạy setup.py --email-device trên máy kia.")
         return False
     explain(reply, say)
     return False

@@ -67,11 +67,16 @@ def encode_join_code(endpoint, token, domain, device=None):
     return base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
 
 
+def code_payload(code):
+    """Decode a join code. Mail clients and terminals may split it, so all whitespace is dropped."""
+    text = "".join(code.split())
+    return json.loads(base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode("utf-8"))
+
+
 def decode_device(code):
     """Return {email, name, share, sync_key} when the code came from --export-device, else None."""
     link = decode_join_code(code)
-    text = code.strip()
-    data = json.loads(base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode("utf-8"))
+    data = code_payload(code)
     if not data.get("sync_key"):
         return None
     share = data.get("share")
@@ -86,9 +91,8 @@ def decode_device(code):
 
 
 def decode_join_code(code):
-    text = code.strip()
     try:
-        data = json.loads(base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode("utf-8"))
+        data = code_payload(code)
     except (ValueError, UnicodeDecodeError) as error:
         raise TeamError("Mã tham gia không hợp lệ. Copy lại toàn bộ mã đang ghim trong Chat.") from error
     if not isinstance(data, dict):
