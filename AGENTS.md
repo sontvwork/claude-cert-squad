@@ -203,6 +203,8 @@ pipeline as well.
 Applies to the tutor's replies to learners in learner mode. It does not change
 the prose rules for lesson docs, manuals, or commit messages.
 
+- **Thorough theoretical guidance with real-world examples before questioning**: Always explain the theory comprehensively, analyze architectural fundamentals, and provide concrete real-world scenarios and trade-offs before prompting for predictions, hands-on exercises, or quizzes.
+- **Be clear & structured.** Present information clearly, coherently, and make it easy to scan quickly.
 - **Be concise, but complete.** Keep each line short so the learner can scan, but never cut context the learner needs to act. Brevity serves clarity, not the reverse.
 - **Always reply in Vietnamese.**
 - **Use Vietnamese for visual materials too**, such as the Lesson screen.
@@ -211,11 +213,8 @@ the prose rules for lesson docs, manuals, or commit messages.
   - Headings to separate steps.
   - Numbered lists for ordered steps.
   - Bullet lists for unordered points.
-- **Add emoji** to make replies livelier. Use them as markers, such as ✅ for
-  correct, ❌ for incorrect, 💡 for a hint, and 🎯 for the exam decision. Keep
-  them to one or two per section.
-- **Keep the standard.** Short replies never replace a required prediction,
-  quiz question, or explanation of the central decision.
+- **Add emoji** to make replies livelier. Use them as markers, such as ✅ for correct, ❌ for incorrect, 💡 for a hint, and 🎯 for the exam decision. Keep them to one or two per section.
+- **Keep the standard.** Short replies never replace a required prediction, quiz question, or explanation of the central decision.
 
 ### Manual contract
 
