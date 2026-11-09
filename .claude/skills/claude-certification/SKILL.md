@@ -224,8 +224,12 @@ brief feedback. If both answers are wrong, offer review before advancing.
 
 Teach the current lesson in this order:
 
-1. Frame `The Problem` against the learner's goal.
-2. Explain `The Concept` in small sections and pause for predictions.
+1. Show the map. Frame `The Problem` against the learner's goal in two or three
+   sentences, list the lesson's three to six ideas with one line each, and ask
+   where to start. A learner may skip an idea they already know. The post-quiz
+   and lab still apply.
+2. Teach `The Concept` one idea per turn, then stop. Each idea follows the
+   shape below and ends with one question.
 3. Use the registered `Interactive Lab` relationship. On the website, have the
    learner manipulate it. In GitHub-only mode, reproduce the decision by
    changing inputs to the local scenario runner or reasoning through a concrete
@@ -233,10 +237,41 @@ Teach the current lesson in this order:
 4. Ask the lesson's `pre` and `check` questions at the relevant point. Wait for
    each answer before revealing its explanation.
 
+Each idea uses four parts, in this order:
+
+1. **Problem:** what goes wrong without this idea.
+2. **Solution:** the idea in one or two sentences.
+3. **Picture it:** one everyday analogy or one scenario from the learner's work.
+4. **Takeaway:** a small table or two to three bullets with the exact exam terms.
+
+This filled example shows the expected length and tone:
+
+```text
+**Vấn đề.** Server chạy trên nhiều máy. Nếu máy A nhớ client sau lần bắt tay
+đầu tiên, request tiếp theo rơi vào máy B sẽ lỗi, vì máy B chưa biết client là ai.
+
+**Giải pháp.** MCP bản 2026-07-28 bỏ bắt tay và session. Mọi request tự mang
+phiên bản giao thức và khả năng của client, nên máy nào cũng xử lý được.
+
+**Hình dung.** Giống quầy giao dịch không giữ hồ sơ của bạn: mỗi lần đến, bạn
+mang đủ giấy tờ, nên nhân viên nào tiếp cũng được.
+
+| Chốt | |
+|---|---|
+| Mỗi request mang | protocolVersion, clientCapabilities |
+| Đã bỏ | initialize, protocol session |
+| Lợi ích | Retry sang máy khác vẫn chạy |
+```
+
 Adapt depth to the learner's responses. Do not paste or recite the whole
 lesson.
 
 ### 3. Run the practical lab
+
+Open the lab with a context line that says the theory is done, this step runs
+the lesson's code rather than teaching a new idea, and which file or scenario
+it uses. Give the same kind of context line before the artifact and the
+post-quiz.
 
 From the repository root, run the actual lesson artifacts:
 
@@ -247,6 +282,12 @@ python3 -m unittest discover -s <lesson-path>/code/tests -v
 
 Before each run, ask the learner to predict the result or failure. Explain the
 observable state and connect it to the exam decision.
+
+Every prediction question must be answerable from the lessons already taught
+plus the question itself. State each condition the answer depends on, such as
+what the request carries and what is unchanged. Before asking, check that the
+learner would not need to open a file. If the answer depends on implementation
+details, show them in the question.
 
 ### Guided no-code mode
 
